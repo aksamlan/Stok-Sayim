@@ -350,6 +350,24 @@ function InventoryCounterContent() {
     setStockItems([])
   }
 
+  // Download sample CSV
+  const downloadSampleCSV = () => {
+    const sampleData = `Barkod;Adet
+8690123456789;10
+8690987654321;25
+8691234567890;15
+8695678901234;8
+8699876543210;30`
+    
+    const blob = new Blob(["\ufeff" + sampleData], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = "ornek_stok.csv"
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
   // Export to Excel (XLS format with proper column separation)
   const exportToExcel = () => {
     const xmlHeader = `<?xml version="1.0" encoding="UTF-8"?>
@@ -916,6 +934,23 @@ function InventoryCounterContent() {
           </TabsContent>
 
           <TabsContent value="compare" className="mt-6">
+            {/* Instructions Card */}
+            <Card className="mb-6 border-blue-500/30 bg-blue-500/5">
+              <CardContent className="py-4">
+                <h3 className="font-semibold mb-2">Nasil Kullanilir?</h3>
+                <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
+                  <li><strong>Sayimdan once:</strong> Mevcut stok listenizi CSV olarak yukleyin (asagidaki butonu kullanin)</li>
+                  <li><strong>Sayim yapin:</strong> "Sayim Listesi" sekmesinden barkodlari okutarak sayim yapin</li>
+                  <li><strong>Karsilastirin:</strong> Bu sekmeye donup sonuclari gorun - farklar otomatik hesaplanir</li>
+                </ol>
+                <div className="mt-3 p-3 bg-muted rounded-md">
+                  <p className="text-xs font-medium mb-1">CSV Formati:</p>
+                  <code className="text-xs">Barkod;Adet</code> veya <code className="text-xs">Barkod,Adet</code>
+                  <p className="text-xs text-muted-foreground mt-1">Ilk satir baslik olabilir (otomatik atlanir)</p>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Stock Upload Section */}
             <Card className="mb-6">
               <CardHeader>
@@ -935,7 +970,11 @@ function InventoryCounterContent() {
                       </p>
                     )}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
+                    <Button variant="outline" onClick={downloadSampleCSV}>
+                      <Download className="h-4 w-4 mr-2" />
+                      Ornek CSV
+                    </Button>
                     <Button variant="outline" onClick={() => stockFileInputRef.current?.click()}>
                       <Upload className="h-4 w-4 mr-2" />
                       Stok CSV Yukle
@@ -950,7 +989,7 @@ function InventoryCounterContent() {
                     {stockItems.length > 0 && (
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="outline" size="icon">
+                          <Button variant="outline" size="icon" className="bg-transparent">
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </AlertDialogTrigger>
