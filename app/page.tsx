@@ -1,7 +1,8 @@
 "use client"
 
 import React, { Suspense, useState, useEffect, useRef, useCallback } from "react"
-import { Plus, Minus, Trash2, Download, Upload, Moon, Sun, Search, Volume2, VolumeX, RotateCcw, Camera, ScanBarcode, Package, AlertTriangle, CheckCircle2, XCircle } from "lucide-react"
+import { Plus, Minus, Trash2, Download, Upload, Moon, Sun, Search, Volume2, VolumeX, RotateCcw, Camera, ScanBarcode, Package, AlertTriangle, CheckCircle2, XCircle, Zap, ClipboardList, Pencil, PlusCircle } from "lucide-react"
+import { Toaster, toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -38,6 +39,15 @@ interface InventoryItem {
   quantity: number
 }
 
+interface CountSession {
+  id: string
+  name: string
+  createdAt: number
+}
+
+const genSessionId = () =>
+  Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
+
 interface ComparisonResult {
   barcode: string
   stockQty: number
@@ -51,8 +61,14 @@ type Html5QrcodeType = any
 function InventoryCounterContent() {
   const [items, setItems] = useState<InventoryItem[]>([])
   const [stockItems, setStockItems] = useState<InventoryItem[]>([])
+  const [sessions, setSessions] = useState<CountSession[]>([])
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false)
+  const [renameValue, setRenameValue] = useState("")
   const [barcodeInput, setBarcodeInput] = useState("")
-  const [quantityInput, setQuantityInput] = useState(1)
+  const [quantityInput, setQuantityInput] = useState("1")
+  const [quickMode, setQuickMode] = useState(false)
+  const [quickQty, setQuickQty] = useState(1)
   const [searchQuery, setSearchQuery] = useState("")
   const [darkMode, setDarkMode] = useState(false)
   const [soundEnabled, setSoundEnabled] = useState(true)
@@ -62,8 +78,7 @@ function InventoryCounterContent() {
   const [activeTab, setActiveTab] = useState<"count" | "compare">("count")
   const [deleteConfirmBarcode, setDeleteConfirmBarcode] = useState<string | null>(null)
   const [decrementConfirmBarcode, setDecrementConfirmBarcode] = useState<string | null>(null)
-  const [shouldScrollTo, setShouldScrollTo] = useState<string | null>(null)
-  
+
   const barcodeInputRef = useRef<HTMLInputElement>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -71,15 +86,46 @@ function InventoryCounterContent() {
   const scannerRef = useRef<HTMLDivElement>(null)
   const html5QrScannerRef = useRef<Html5QrcodeType>(null)
   const addBarcodeRef = useRef<((barcode: string, qty: number) => void) | null>(null)
+  const itemsRef = useRef<InventoryItem[]>([])
+  const quickModeRef = useRef(false)
+  const quickQtyRef = useRef(1)
+  const lastCamScanRef = useRef<{ code: string; time: number }>({ code: "", time: 0 })
 
   // Load from localStorage on mount
   useEffect(() => {
-    const savedItems = localStorage.getItem("inventoryItems")
+    // Sessions: migrate legacy single-list data into the first session
+    let loadedSessions: CountSession[] = []
+    try {
+      loadedSessions = JSON.parse(localStorage.getItem("inventorySessions") || "[]")
+    } catch {
+      loadedSessions = []
+    }
+    let activeId = localStorage.getItem("inventoryActiveSession")
+    if (!Array.isArray(loadedSessions) || loadedSessions.length === 0) {
+      const id = genSessionId()
+      loadedSessions = [{ id, name: "Sayım 1", createdAt: Date.now() }]
+      activeId = id
+      const legacyItems = localStorage.getItem("inventoryItems")
+      if (legacyItems) {
+        localStorage.setItem(`inventoryItems_${id}`, legacyItems)
+      }
+      localStorage.setItem("inventorySessions", JSON.stringify(loadedSessions))
+      localStorage.setItem("inventoryActiveSession", id)
+    }
+    if (!activeId || !loadedSessions.some(s => s.id === activeId)) {
+      activeId = loadedSessions[0].id
+    }
+    setSessions(loadedSessions)
+    setActiveSessionId(activeId)
+
+    const savedItems = localStorage.getItem(`inventoryItems_${activeId}`)
     const savedStockItems = localStorage.getItem("inventoryStockItems")
     const savedDarkMode = localStorage.getItem("inventoryDarkMode")
     const savedSound = localStorage.getItem("inventorySoundEnabled")
     const savedLastScanned = localStorage.getItem("inventoryLastScanned")
-    
+    const savedQuickMode = localStorage.getItem("inventoryQuickMode")
+    const savedQuickQty = localStorage.getItem("inventoryQuickQty")
+
     if (savedItems) {
       try {
         setItems(JSON.parse(savedItems))
@@ -103,12 +149,46 @@ function InventoryCounterContent() {
     if (savedLastScanned) {
       setLastScannedPersistent(savedLastScanned)
     }
+    if (savedQuickMode) {
+      setQuickMode(savedQuickMode === "true")
+    }
+    if (savedQuickQty) {
+      const qty = parseInt(savedQuickQty)
+      if (!isNaN(qty) && qty > 0) setQuickQty(qty)
+    }
   }, [])
 
-  // Save to localStorage when items change
+  // Keep refs in sync (used by camera callback and toast messages)
   useEffect(() => {
-    localStorage.setItem("inventoryItems", JSON.stringify(items))
+    itemsRef.current = items
   }, [items])
+
+  useEffect(() => {
+    quickModeRef.current = quickMode
+    localStorage.setItem("inventoryQuickMode", String(quickMode))
+  }, [quickMode])
+
+  useEffect(() => {
+    quickQtyRef.current = quickQty
+    localStorage.setItem("inventoryQuickQty", String(quickQty))
+  }, [quickQty])
+
+  // Save to localStorage when items change (per active session)
+  useEffect(() => {
+    if (!activeSessionId) return
+    localStorage.setItem(`inventoryItems_${activeSessionId}`, JSON.stringify(items))
+  }, [items, activeSessionId])
+
+  // Persist sessions list and active session
+  useEffect(() => {
+    if (sessions.length === 0) return
+    localStorage.setItem("inventorySessions", JSON.stringify(sessions))
+  }, [sessions])
+
+  useEffect(() => {
+    if (!activeSessionId) return
+    localStorage.setItem("inventoryActiveSession", activeSessionId)
+  }, [activeSessionId])
 
   // Save stock items to localStorage
   useEffect(() => {
@@ -134,20 +214,6 @@ function InventoryCounterContent() {
   useEffect(() => {
     barcodeInputRef.current?.focus()
   }, [])
-
-  // Handle scroll to item (only when shouldScrollTo changes)
-  useEffect(() => {
-    if (shouldScrollTo) {
-      const timer = setTimeout(() => {
-        const row = document.querySelector(`[data-barcode="${shouldScrollTo}"]`)
-        if (row) {
-          row.scrollIntoView({ behavior: "smooth", block: "center" })
-        }
-        setShouldScrollTo(null)
-      }, 100)
-      return () => clearTimeout(timer)
-    }
-  }, [shouldScrollTo])
 
   // Play beep sound
   const playBeep = useCallback(() => {
@@ -178,16 +244,33 @@ function InventoryCounterContent() {
     }
   }, [soundEnabled])
 
+  // Undo a just-made addition (from toast action)
+  const undoAdd = useCallback((barcode: string, qty: number) => {
+    setItems(prevItems =>
+      prevItems
+        .map(item =>
+          item.barcode === barcode
+            ? { ...item, quantity: item.quantity - qty }
+            : item
+        )
+        .filter(item => item.quantity > 0)
+    )
+    toast.info(`${barcode} geri alındı (-${qty})`)
+  }, [])
+
   // Add barcode to list (shared logic)
   const addBarcodeToList = useCallback((barcode: string, qty: number) => {
     playBeep()
     setLastScanned(barcode)
     setLastScannedPersistent(barcode)
     localStorage.setItem("inventoryLastScanned", barcode)
-    
+
+    const prevQty = itemsRef.current.find(item => item.barcode === barcode)?.quantity ?? 0
+    const newQty = prevQty + qty
+
     setItems(prevItems => {
       const existingIndex = prevItems.findIndex(item => item.barcode === barcode)
-      
+
       if (existingIndex >= 0) {
         const newItems = [...prevItems]
         newItems[existingIndex] = {
@@ -200,12 +283,19 @@ function InventoryCounterContent() {
       }
     })
 
-    // Trigger scroll to the scanned item
-    setShouldScrollTo(barcode)
+    // Sliding toast notification at the top (no page scroll)
+    toast.success(barcode, {
+      description: `+${qty} eklendi · Toplam: ${newQty}${prevQty === 0 ? " (yeni ürün)" : ""}`,
+      duration: 2500,
+      action: {
+        label: "Geri Al",
+        onClick: () => undoAdd(barcode, qty),
+      },
+    })
 
     // Clear row highlight after animation (persistent label stays)
     setTimeout(() => setLastScanned(null), 1500)
-  }, [playBeep])
+  }, [playBeep, undoAdd])
 
   // Keep ref in sync so camera callback can access latest
   useEffect(() => {
@@ -246,13 +336,28 @@ function InventoryCounterContent() {
             qrbox: { width: 250, height: 150 },
           },
           (decodedText: string) => {
-            // Use ref to get latest addBarcodeToList
-            if (addBarcodeRef.current) {
-              addBarcodeRef.current(decodedText.trim(), 1)
+            const code = decodedText.trim()
+            const now = Date.now()
+            const last = lastCamScanRef.current
+
+            if (quickModeRef.current) {
+              // Quick mode: keep camera open, add with selected quantity.
+              // Cooldown prevents the same frame being counted multiple times.
+              if (code === last.code && now - last.time < 2000) return
+              if (now - last.time < 600) return
+              lastCamScanRef.current = { code, time: now }
+              if (addBarcodeRef.current) {
+                addBarcodeRef.current(code, quickQtyRef.current)
+              }
+            } else {
+              // Normal mode: add once and close camera
+              lastCamScanRef.current = { code, time: now }
+              if (addBarcodeRef.current) {
+                addBarcodeRef.current(code, 1)
+              }
+              html5QrCode.stop().catch(() => {})
+              setCameraOpen(false)
             }
-            // Close camera after successful scan
-            html5QrCode.stop().catch(() => {})
-            setCameraOpen(false)
           },
           () => {
             // Scan error - ignore, keep scanning
@@ -280,13 +385,17 @@ function InventoryCounterContent() {
     
     const barcode = barcodeInput.trim()
     if (!barcode) return
-    
-    addBarcodeToList(barcode, quantityInput)
-    
+
+    const qty = quickMode
+      ? quickQty
+      : Math.max(1, parseInt(quantityInput) || 1)
+
+    addBarcodeToList(barcode, qty)
+
     setBarcodeInput("")
-    setQuantityInput(1)
+    setQuantityInput("1")
     barcodeInputRef.current?.focus()
-  }, [barcodeInput, quantityInput, addBarcodeToList])
+  }, [barcodeInput, quantityInput, quickMode, quickQty, addBarcodeToList])
 
   // Close camera and cleanup
   const closeCamera = useCallback(async () => {
@@ -336,6 +445,80 @@ function InventoryCounterContent() {
     setDeleteConfirmBarcode(null)
   }
 
+  // Load a session's items from storage
+  const loadSessionItems = (id: string): InventoryItem[] => {
+    try {
+      const raw = localStorage.getItem(`inventoryItems_${id}`)
+      const parsed = raw ? JSON.parse(raw) : []
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  }
+
+  // Switch to another count session (current one is already saved)
+  const switchSession = (id: string) => {
+    if (id === activeSessionId) return
+    const target = sessions.find(s => s.id === id)
+    if (!target) return
+    setActiveSessionId(id)
+    setItems(loadSessionItems(id))
+    setLastScanned(null)
+    setSearchQuery("")
+    toast.info(`"${target.name}" sayımına geçildi — kaldığınız yerden devam edebilirsiniz`)
+    barcodeInputRef.current?.focus()
+  }
+
+  // Freeze current count and start a new one
+  const newSession = () => {
+    const current = sessions.find(s => s.id === activeSessionId)
+    const id = genSessionId()
+    const name = `Sayım ${sessions.length + 1}`
+    const session: CountSession = { id, name, createdAt: Date.now() }
+    localStorage.setItem(`inventoryItems_${id}`, "[]")
+    setSessions(prev => [...prev, session])
+    setActiveSessionId(id)
+    setItems([])
+    setLastScanned(null)
+    setSearchQuery("")
+    toast.success(`Yeni sayım başlatıldı: ${name}`, {
+      description: current ? `"${current.name}" donduruldu, dilediğinizde geri dönebilirsiniz` : undefined,
+    })
+    barcodeInputRef.current?.focus()
+  }
+
+  // Rename active session
+  const renameSession = () => {
+    const name = renameValue.trim()
+    if (!name || !activeSessionId) return
+    setSessions(prev => prev.map(s => (s.id === activeSessionId ? { ...s, name } : s)))
+    setRenameDialogOpen(false)
+    toast.success(`Sayım adı güncellendi: ${name}`)
+  }
+
+  // Delete active session (and its stored items)
+  const deleteActiveSession = () => {
+    if (!activeSessionId) return
+    const remaining = sessions.filter(s => s.id !== activeSessionId)
+    localStorage.removeItem(`inventoryItems_${activeSessionId}`)
+
+    if (remaining.length === 0) {
+      const id = genSessionId()
+      const session: CountSession = { id, name: "Sayım 1", createdAt: Date.now() }
+      localStorage.setItem(`inventoryItems_${id}`, "[]")
+      setSessions([session])
+      setActiveSessionId(id)
+      setItems([])
+    } else {
+      setSessions(remaining)
+      setActiveSessionId(remaining[0].id)
+      setItems(loadSessionItems(remaining[0].id))
+    }
+    setLastScanned(null)
+    setSearchQuery("")
+    toast.info("Sayım silindi")
+  }
+
   // Clear all items
   const clearAll = () => {
     setItems([])
@@ -374,7 +557,7 @@ function InventoryCounterContent() {
 <?mso-application progid="Excel.Sheet"?>
 <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
   xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
-  <Worksheet ss:Name="Stok Sayim">
+  <Worksheet ss:Name="Stok Sayım">
     <Table>
       <Column ss:Width="150"/>
       <Column ss:Width="80"/>
@@ -419,7 +602,7 @@ function InventoryCounterContent() {
     <Style ss:ID="onlyStock"><Interior ss:Color="#ef4444" ss:Pattern="Solid"/></Style>
     <Style ss:ID="onlyCount"><Interior ss:Color="#3b82f6" ss:Pattern="Solid"/></Style>
   </Styles>
-  <Worksheet ss:Name="Karsilastirma">
+  <Worksheet ss:Name="Karşılaştırma">
     <Table>
       <Column ss:Width="150"/>
       <Column ss:Width="80"/>
@@ -429,16 +612,16 @@ function InventoryCounterContent() {
       <Row>
         <Cell><Data ss:Type="String">Barkod</Data></Cell>
         <Cell><Data ss:Type="String">Stok</Data></Cell>
-        <Cell><Data ss:Type="String">Sayim</Data></Cell>
+        <Cell><Data ss:Type="String">Sayım</Data></Cell>
         <Cell><Data ss:Type="String">Fark</Data></Cell>
         <Cell><Data ss:Type="String">Durum</Data></Cell>
       </Row>`
     
     const statusText = {
-      "match": "Esit",
-      "difference": "Farkli",
+      "match": "Eşit",
+      "difference": "Farklı",
       "only-stock": "Sadece Stok",
-      "only-count": "Sadece Sayim"
+      "only-count": "Sadece Sayım"
     }
     
     const xmlRows = comparison.map(item => `
@@ -503,7 +686,13 @@ function InventoryCounterContent() {
     reader.onload = (event) => {
       const text = event.target?.result as string
       const importedItems = parseCSV(text)
-      
+
+      if (importedItems.length === 0) {
+        toast.error("CSV dosyasında geçerli veri bulunamadı")
+        return
+      }
+      toast.success(`${importedItems.length} ürün CSV'den içe aktarıldı`)
+
       setItems(prevItems => {
         const mergedItems = [...prevItems]
         
@@ -533,7 +722,12 @@ function InventoryCounterContent() {
     reader.onload = (event) => {
       const text = event.target?.result as string
       const importedItems = parseCSV(text)
+      if (importedItems.length === 0) {
+        toast.error("CSV dosyasında geçerli veri bulunamadı")
+        return
+      }
       setStockItems(importedItems)
+      toast.success(`Stok listesi yüklendi: ${importedItems.length} ürün`)
     }
     
     reader.readAsText(file)
@@ -607,11 +801,11 @@ function InventoryCounterContent() {
   const getStatusBadge = (status: ComparisonResult["status"]) => {
     switch (status) {
       case "match":
-        return <Badge className="bg-green-500 hover:bg-green-600"><CheckCircle2 className="h-3 w-3 mr-1" />Esit</Badge>
+        return <Badge className="bg-green-500 hover:bg-green-600"><CheckCircle2 className="h-3 w-3 mr-1" />Eşit</Badge>
       case "difference":
-        return <Badge className="bg-amber-500 hover:bg-amber-600"><AlertTriangle className="h-3 w-3 mr-1" />Farkli</Badge>
+        return <Badge className="bg-amber-500 hover:bg-amber-600"><AlertTriangle className="h-3 w-3 mr-1" />Farklı</Badge>
       case "only-stock":
-        return <Badge className="bg-red-500 hover:bg-red-600"><XCircle className="h-3 w-3 mr-1" />Sayilmadi</Badge>
+        return <Badge className="bg-red-500 hover:bg-red-600"><XCircle className="h-3 w-3 mr-1" />Sayılmadı</Badge>
       case "only-count":
         return <Badge className="bg-blue-500 hover:bg-blue-600"><Plus className="h-3 w-3 mr-1" />Fazla</Badge>
     }
@@ -619,16 +813,23 @@ function InventoryCounterContent() {
 
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors duration-200">
+      <Toaster
+        position="top-center"
+        richColors
+        theme={darkMode ? "dark" : "light"}
+        toastOptions={{ style: { fontSize: "0.95rem" } }}
+        visibleToasts={3}
+      />
       <div className="container mx-auto p-4 max-w-4xl">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold">Stok Sayim</h1>
+          <h1 className="text-2xl font-bold">Stok Sayım</h1>
           <div className="flex gap-2">
             <Button
               variant="outline"
               size="icon"
               onClick={() => setSoundEnabled(!soundEnabled)}
-              title={soundEnabled ? "Sesi Kapat" : "Sesi Ac"}
+              title={soundEnabled ? "Sesi Kapat" : "Sesi Aç"}
             >
               {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
             </Button>
@@ -636,12 +837,109 @@ function InventoryCounterContent() {
               variant="outline"
               size="icon"
               onClick={() => setDarkMode(!darkMode)}
-              title={darkMode ? "Acik Tema" : "Koyu Tema"}
+              title={darkMode ? "Açık Tema" : "Koyu Tema"}
             >
               {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
           </div>
         </div>
+
+        {/* Count Session Bar */}
+        <Card className="mb-4">
+          <CardContent className="py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <ClipboardList className="h-4 w-4 text-primary" />
+                <span className="hidden sm:inline">Aktif Sayım</span>
+              </div>
+              <select
+                value={activeSessionId ?? ""}
+                onChange={(e) => switchSession(e.target.value)}
+                className="flex-1 min-w-[140px] h-9 rounded-md border border-input bg-background px-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ring"
+                title="Sayım seç"
+              >
+                {sessions.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="bg-transparent"
+                onClick={() => {
+                  const current = sessions.find(s => s.id === activeSessionId)
+                  setRenameValue(current?.name ?? "")
+                  setRenameDialogOpen(true)
+                }}
+                title="Sayımı yeniden adlandır"
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="bg-transparent text-destructive"
+                    title="Bu sayımı sil"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Bu sayımı sil?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {`"${sessions.find(s => s.id === activeSessionId)?.name ?? ""}" sayımı ve içindeki tüm veriler silinecek. Bu işlem geri alınamaz.`}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>İptal</AlertDialogCancel>
+                    <AlertDialogAction onClick={deleteActiveSession}>Sil</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              <Button type="button" size="sm" onClick={newSession}>
+                <PlusCircle className="h-4 w-4 mr-1.5" />
+                Yeni Sayım
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Yeni sayım başlattığınızda mevcut sayım dondurulur; listeden seçerek kaldığınız yerden devam edersiniz.
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Rename Session Dialog */}
+        <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Sayımı yeniden adlandır</DialogTitle>
+            </DialogHeader>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                renameSession()
+              }}
+              className="flex flex-col gap-3"
+            >
+              <Input
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                placeholder="Sayım adı (örn. Depo A)"
+                autoFocus
+                maxLength={40}
+              />
+              <Button type="submit" disabled={!renameValue.trim()}>
+                Kaydet
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
 
         {/* Last Scanned Indicator */}
         {lastScannedPersistent && (
@@ -681,7 +979,7 @@ function InventoryCounterContent() {
                     type="text"
                     value={barcodeInput}
                     onChange={(e) => setBarcodeInput(e.target.value)}
-                    placeholder="Barkod okutun veya yazin..."
+                    placeholder="Barkod okutun veya yazın..."
                     className="font-mono text-lg h-12"
                     autoComplete="off"
                     autoFocus
@@ -697,26 +995,75 @@ function InventoryCounterContent() {
                   </Button>
                 </div>
               </div>
-              <div className="w-full sm:w-32">
-                <label htmlFor="quantity" className="text-sm font-medium mb-2 block">
-                  Adet
-                </label>
-                <Input
-                  id="quantity"
-                  type="number"
-                  min="1"
-                  value={quantityInput}
-                  onChange={(e) => setQuantityInput(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="font-mono text-lg h-12 text-center"
-                />
-              </div>
+              {!quickMode && (
+                <div className="w-full sm:w-32">
+                  <label htmlFor="quantity" className="text-sm font-medium mb-2 block">
+                    Adet
+                  </label>
+                  <Input
+                    id="quantity"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={quantityInput}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9]/g, "")
+                      setQuantityInput(val)
+                    }}
+                    onFocus={(e) => e.target.select()}
+                    onBlur={() => {
+                      if (!quantityInput || parseInt(quantityInput) < 1) {
+                        setQuantityInput("1")
+                      }
+                    }}
+                    className="font-mono text-lg h-12 text-center"
+                  />
+                </div>
+              )}
               <div className="flex items-end">
-                <Button type="submit" className="h-12 px-6">
+                <Button type="submit" className="h-12 px-6 w-full sm:w-auto">
                   <Plus className="h-4 w-4 mr-2" />
-                  Ekle
+                  Ekle{quickMode ? ` (${quickQty})` : ""}
                 </Button>
               </div>
             </form>
+
+            {/* Quick Add Mode */}
+            <div className="mt-4 pt-4 border-t">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant={quickMode ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setQuickMode(!quickMode)}
+                  className={quickMode ? "" : "bg-transparent"}
+                >
+                  <Zap className={`h-4 w-4 mr-1.5 ${quickMode ? "fill-current" : ""}`} />
+                  Hızlı Ekleme {quickMode ? "Açık" : "Kapalı"}
+                </Button>
+                {quickMode && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {[1, 5, 10, 20, 50, 100].map((qty) => (
+                      <Button
+                        key={qty}
+                        type="button"
+                        variant={quickQty === qty ? "default" : "outline"}
+                        size="sm"
+                        className={`min-w-[44px] font-mono ${quickQty === qty ? "" : "bg-transparent"}`}
+                        onClick={() => setQuickQty(qty)}
+                      >
+                        {qty}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {quickMode && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Her okutmada <b>{quickQty} adet</b> otomatik eklenir. Kamera açık kalır, art arda okutabilirsiniz.
+                </p>
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -732,8 +1079,14 @@ function InventoryCounterContent() {
             <div className="relative">
               <div ref={scannerRef} className="w-full min-h-[300px] rounded-lg overflow-hidden" />
               <p className="text-sm text-muted-foreground text-center mt-3">
-                Barkodu kamera alanina getirin
+                Barkodu kamera alanına getirin
               </p>
+              {quickMode && (
+                <p className="text-xs text-center mt-1 text-primary font-medium">
+                  <Zap className="h-3 w-3 inline mr-1" />
+                  Hızlı mod: her okutmada {quickQty} adet eklenir, kamera açık kalır
+                </p>
+              )}
             </div>
           </DialogContent>
         </Dialog>
@@ -742,13 +1095,13 @@ function InventoryCounterContent() {
         <AlertDialog open={!!deleteConfirmBarcode} onOpenChange={(open) => !open && setDeleteConfirmBarcode(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Urunu sil?</AlertDialogTitle>
+              <AlertDialogTitle>Ürünü sil?</AlertDialogTitle>
               <AlertDialogDescription>
-                <span className="font-mono font-bold">{deleteConfirmBarcode}</span> barkodlu urun silinecek. Bu islem geri alinamaz.
+                <span className="font-mono font-bold">{deleteConfirmBarcode}</span> barkodlu ürün silinecek. Bu işlem geri alınamaz.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Iptal</AlertDialogCancel>
+              <AlertDialogCancel>İptal</AlertDialogCancel>
               <AlertDialogAction onClick={() => deleteConfirmBarcode && confirmDelete(deleteConfirmBarcode)}>
                 Sil
               </AlertDialogAction>
@@ -760,13 +1113,13 @@ function InventoryCounterContent() {
         <AlertDialog open={!!decrementConfirmBarcode} onOpenChange={(open) => !open && setDecrementConfirmBarcode(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Adeti azalt?</AlertDialogTitle>
+              <AlertDialogTitle>Adedi azalt?</AlertDialogTitle>
               <AlertDialogDescription>
-                <span className="font-mono font-bold">{decrementConfirmBarcode}</span> barkodlu urunun adedi 1 azaltilacak.
+                <span className="font-mono font-bold">{decrementConfirmBarcode}</span> barkodlu ürünün adedi 1 azaltılacak.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Iptal</AlertDialogCancel>
+              <AlertDialogCancel>İptal</AlertDialogCancel>
               <AlertDialogAction onClick={() => decrementConfirmBarcode && confirmDecrement(decrementConfirmBarcode)}>
                 Azalt
               </AlertDialogAction>
@@ -777,9 +1130,9 @@ function InventoryCounterContent() {
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "count" | "compare")} className="mb-6">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="count">Sayim Listesi</TabsTrigger>
+            <TabsTrigger value="count">Sayım Listesi</TabsTrigger>
             <TabsTrigger value="compare">
-              Karsilastirma
+              Karşılaştırma
               {stockItems.length > 0 && (
                 <Badge variant="secondary" className="ml-2">{stockItems.length}</Badge>
               )}
@@ -793,11 +1146,11 @@ function InventoryCounterContent() {
                 <CardContent className="py-4">
                   <div className="flex justify-between items-center">
                     <div>
-                      <p className="text-sm text-muted-foreground">Toplam Urun</p>
+                      <p className="text-sm text-muted-foreground">Toplam Ürün</p>
                       <p className="text-2xl font-bold">{totalQuantity}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm text-muted-foreground">Farkli Barkod</p>
+                      <p className="text-sm text-muted-foreground">Farklı Barkod</p>
                       <p className="text-2xl font-bold">{totalUniqueItems}</p>
                     </div>
                   </div>
@@ -807,11 +1160,11 @@ function InventoryCounterContent() {
               <div className="flex gap-2 flex-wrap">
                 <Button variant="outline" onClick={exportToExcel} disabled={items.length === 0}>
                   <Download className="h-4 w-4 mr-2" />
-                  Excel Indir
+                  Excel İndir
                 </Button>
                 <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
                   <Upload className="h-4 w-4 mr-2" />
-                  CSV Yukle
+                  CSV Yükle
                 </Button>
                 <input
                   ref={fileInputRef}
@@ -829,13 +1182,13 @@ function InventoryCounterContent() {
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Tum listeyi temizle?</AlertDialogTitle>
+                      <AlertDialogTitle>Tüm listeyi temizle?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Bu islem geri alinamaz. Tum sayim verileriniz silinecek.
+                        Bu işlem geri alınamaz. Tüm sayım verileriniz silinecek.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel>Iptal</AlertDialogCancel>
+                      <AlertDialogCancel>İptal</AlertDialogCancel>
                       <AlertDialogAction onClick={clearAll}>Temizle</AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
@@ -862,18 +1215,18 @@ function InventoryCounterContent() {
             {/* Table */}
             <Card>
               <CardHeader>
-                <CardTitle>Sayim Listesi</CardTitle>
+                <CardTitle>Sayım Listesi</CardTitle>
               </CardHeader>
               <CardContent>
                 {items.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground">
-                    <p className="text-lg">Henuz urun eklenmedi</p>
-                    <p className="text-sm mt-2">Barkod okutarak baslayin</p>
+                    <p className="text-lg">Henüz ürün eklenmedi</p>
+                    <p className="text-sm mt-2">Barkod okutarak başlayın</p>
                   </div>
                 ) : filteredItems.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground">
-                    <p className="text-lg">Sonuc bulunamadi</p>
-                    <p className="text-sm mt-2">{`"${searchQuery}" ile eslesen barkod yok`}</p>
+                    <p className="text-lg">Sonuç bulunamadı</p>
+                    <p className="text-sm mt-2">{`"${searchQuery}" ile eşleşen barkod yok`}</p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
@@ -882,7 +1235,7 @@ function InventoryCounterContent() {
                         <TableRow>
                           <TableHead className="w-[50%]">Barkod</TableHead>
                           <TableHead className="text-center">Adet</TableHead>
-                          <TableHead className="text-right">Islemler</TableHead>
+                          <TableHead className="text-right">İşlemler</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -937,16 +1290,16 @@ function InventoryCounterContent() {
             {/* Instructions Card */}
             <Card className="mb-6 border-blue-500/30 bg-blue-500/5">
               <CardContent className="py-4">
-                <h3 className="font-semibold mb-2">Nasil Kullanilir?</h3>
+                <h3 className="font-semibold mb-2">Nasıl Kullanılır?</h3>
                 <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
-                  <li><strong>Sayimdan once:</strong> Mevcut stok listenizi CSV olarak yukleyin (asagidaki butonu kullanin)</li>
-                  <li><strong>Sayim yapin:</strong> "Sayim Listesi" sekmesinden barkodlari okutarak sayim yapin</li>
-                  <li><strong>Karsilastirin:</strong> Bu sekmeye donup sonuclari gorun - farklar otomatik hesaplanir</li>
+                  <li><strong>Sayımdan önce:</strong> Mevcut stok listenizi CSV olarak yükleyin (aşağıdaki butonu kullanın)</li>
+                  <li><strong>Sayım yapın:</strong> "Sayım Listesi" sekmesinden barkodları okutarak sayım yapın</li>
+                  <li><strong>Karşılaştırın:</strong> Bu sekmeye dönüp sonuçları görün - farklar otomatik hesaplanır</li>
                 </ol>
                 <div className="mt-3 p-3 bg-muted rounded-md">
-                  <p className="text-xs font-medium mb-1">CSV Formati:</p>
+                  <p className="text-xs font-medium mb-1">CSV Formatı:</p>
                   <code className="text-xs">Barkod;Adet</code> veya <code className="text-xs">Barkod,Adet</code>
-                  <p className="text-xs text-muted-foreground mt-1">Ilk satir baslik olabilir (otomatik atlanir)</p>
+                  <p className="text-xs text-muted-foreground mt-1">İlk satır başlık olabilir (otomatik atlanır)</p>
                 </div>
               </CardContent>
             </Card>
@@ -963,21 +1316,21 @@ function InventoryCounterContent() {
                 <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
                   <div className="flex-1">
                     {stockItems.length === 0 ? (
-                      <p className="text-muted-foreground">Karsilastirma icin mevcut stok dosyanizi yukleyin</p>
+                      <p className="text-muted-foreground">Karşılaştırma için mevcut stok dosyanızı yükleyin</p>
                     ) : (
                       <p className="text-sm">
-                        <span className="font-bold">{stockItems.length}</span> farkli urun, toplam <span className="font-bold">{stockItems.reduce((s, i) => s + i.quantity, 0)}</span> adet
+                        <span className="font-bold">{stockItems.length}</span> farklı ürün, toplam <span className="font-bold">{stockItems.reduce((s, i) => s + i.quantity, 0)}</span> adet
                       </p>
                     )}
                   </div>
                   <div className="flex gap-2 flex-wrap">
                     <Button variant="outline" onClick={downloadSampleCSV}>
                       <Download className="h-4 w-4 mr-2" />
-                      Ornek CSV
+                      Örnek CSV
                     </Button>
                     <Button variant="outline" onClick={() => stockFileInputRef.current?.click()}>
                       <Upload className="h-4 w-4 mr-2" />
-                      Stok CSV Yukle
+                      Stok CSV Yükle
                     </Button>
                     <input
                       ref={stockFileInputRef}
@@ -997,11 +1350,11 @@ function InventoryCounterContent() {
                           <AlertDialogHeader>
                             <AlertDialogTitle>Stok verisini sil?</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Yuklenen stok verisi silinecek. Sayim verileri etkilenmez.
+                              Yüklenen stok verisi silinecek. Sayım verileri etkilenmez.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
-                            <AlertDialogCancel>Iptal</AlertDialogCancel>
+                            <AlertDialogCancel>İptal</AlertDialogCancel>
                             <AlertDialogAction onClick={clearStock}>Sil</AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
@@ -1017,19 +1370,19 @@ function InventoryCounterContent() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
                 <Card className="border-l-4 border-l-green-500">
                   <CardContent className="py-3">
-                    <p className="text-xs text-muted-foreground">Esit</p>
+                    <p className="text-xs text-muted-foreground">Eşit</p>
                     <p className="text-xl font-bold text-green-500">{matchCount}</p>
                   </CardContent>
                 </Card>
                 <Card className="border-l-4 border-l-amber-500">
                   <CardContent className="py-3">
-                    <p className="text-xs text-muted-foreground">Farkli</p>
+                    <p className="text-xs text-muted-foreground">Farklı</p>
                     <p className="text-xl font-bold text-amber-500">{diffCount}</p>
                   </CardContent>
                 </Card>
                 <Card className="border-l-4 border-l-red-500">
                   <CardContent className="py-3">
-                    <p className="text-xs text-muted-foreground">Sayilmadi</p>
+                    <p className="text-xs text-muted-foreground">Sayılmadı</p>
                     <p className="text-xl font-bold text-red-500">{onlyStockCount}</p>
                   </CardContent>
                 </Card>
@@ -1047,7 +1400,7 @@ function InventoryCounterContent() {
               <div className="mb-6">
                 <Button variant="outline" onClick={exportComparisonToExcel}>
                   <Download className="h-4 w-4 mr-2" />
-                  Karsilastirma Excel Indir
+                  Karşılaştırma Excel İndir
                 </Button>
               </div>
             )}
@@ -1073,20 +1426,20 @@ function InventoryCounterContent() {
             {/* Comparison Table */}
             <Card>
               <CardHeader>
-                <CardTitle>Karsilastirma Sonuclari</CardTitle>
+                <CardTitle>Karşılaştırma Sonuçları</CardTitle>
               </CardHeader>
               <CardContent>
                 {stockItems.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground">
                     <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p className="text-lg">Stok verisi yuklenmedi</p>
-                    <p className="text-sm mt-2">Karsilastirma icin once stok CSV dosyanizi yukleyin</p>
+                    <p className="text-lg">Stok verisi yüklenmedi</p>
+                    <p className="text-sm mt-2">Karşılaştırma için önce stok CSV dosyanızı yükleyin</p>
                   </div>
                 ) : items.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground">
                     <ScanBarcode className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p className="text-lg">Sayim yapilmadi</p>
-                    <p className="text-sm mt-2">Karsilastirma icin barkod okutarak sayim yapin</p>
+                    <p className="text-lg">Sayım yapılmadı</p>
+                    <p className="text-sm mt-2">Karşılaştırma için barkod okutarak sayım yapın</p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
@@ -1095,7 +1448,7 @@ function InventoryCounterContent() {
                         <TableRow>
                           <TableHead>Barkod</TableHead>
                           <TableHead className="text-center">Stok</TableHead>
-                          <TableHead className="text-center">Sayim</TableHead>
+                          <TableHead className="text-center">Sayım</TableHead>
                           <TableHead className="text-center">Fark</TableHead>
                           <TableHead className="text-right">Durum</TableHead>
                         </TableRow>
@@ -1131,7 +1484,7 @@ function InventoryCounterContent() {
 
         {/* Footer */}
         <p className="text-center text-sm text-muted-foreground mt-6">
-          Veriler tarayicinizda otomatik olarak kaydedilir
+          Veriler tarayıcınızda otomatik olarak kaydedilir
         </p>
       </div>
     </div>
