@@ -397,6 +397,12 @@ function InventoryCounterContent() {
     barcodeInputRef.current?.focus()
   }, [barcodeInput, quantityInput, quickMode, quickQty, addBarcodeToList])
 
+  // Adjust the manual quantity input with +/- buttons
+  const adjustQuantity = (delta: number) => {
+    const current = parseInt(quantityInput) || 1
+    setQuantityInput(String(Math.max(1, current + delta)))
+  }
+
   // Close camera and cleanup
   const closeCamera = useCallback(async () => {
     if (html5QrScannerRef.current) {
@@ -996,28 +1002,48 @@ function InventoryCounterContent() {
                 </div>
               </div>
               {!quickMode && (
-                <div className="w-full sm:w-32">
+                <div className="w-full sm:w-52">
                   <label htmlFor="quantity" className="text-sm font-medium mb-2 block">
                     Adet
                   </label>
-                  <Input
-                    id="quantity"
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={quantityInput}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/[^0-9]/g, "")
-                      setQuantityInput(val)
-                    }}
-                    onFocus={(e) => e.target.select()}
-                    onBlur={() => {
-                      if (!quantityInput || parseInt(quantityInput) < 1) {
-                        setQuantityInput("1")
-                      }
-                    }}
-                    className="font-mono text-lg h-12 text-center"
-                  />
+                  <div className="flex gap-1.5">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-12 w-12 shrink-0 bg-transparent"
+                      onClick={() => adjustQuantity(-1)}
+                      title="Adedi azalt"
+                    >
+                      <Minus className="h-4 w-4" />
+                    </Button>
+                    <Input
+                      id="quantity"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={quantityInput}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/[^0-9]/g, "")
+                        setQuantityInput(val)
+                      }}
+                      onFocus={(e) => e.target.select()}
+                      onBlur={() => {
+                        if (!quantityInput || parseInt(quantityInput) < 1) {
+                          setQuantityInput("1")
+                        }
+                      }}
+                      className="font-mono text-lg h-12 text-center"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-12 w-12 shrink-0 bg-transparent"
+                      onClick={() => adjustQuantity(1)}
+                      title="Adedi artır"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               )}
               <div className="flex items-end">
@@ -1041,28 +1067,40 @@ function InventoryCounterContent() {
                   <Zap className={`h-4 w-4 mr-1.5 ${quickMode ? "fill-current" : ""}`} />
                   Hızlı Ekleme {quickMode ? "Açık" : "Kapalı"}
                 </Button>
-                {quickMode && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {[1, 5, 10, 20, 50, 100].map((qty) => (
+                <div className="flex flex-wrap gap-1.5">
+                  {[1, 5, 10, 20, 50, 100].map((qty) => {
+                    const selected = quickMode
+                      ? quickQty === qty
+                      : quantityInput === String(qty)
+                    return (
                       <Button
                         key={qty}
                         type="button"
-                        variant={quickQty === qty ? "default" : "outline"}
+                        variant={selected ? "default" : "outline"}
                         size="sm"
-                        className={`min-w-[44px] font-mono ${quickQty === qty ? "" : "bg-transparent"}`}
-                        onClick={() => setQuickQty(qty)}
+                        className={`min-w-[44px] font-mono ${selected ? "" : "bg-transparent"}`}
+                        onClick={() => {
+                          if (quickMode) {
+                            setQuickQty(qty)
+                          } else {
+                            setQuantityInput(String(qty))
+                            barcodeInputRef.current?.focus()
+                          }
+                        }}
                       >
                         {qty}
                       </Button>
-                    ))}
-                  </div>
-                )}
+                    )
+                  })}
+                </div>
               </div>
-              {quickMode && (
-                <p className="text-xs text-muted-foreground mt-2">
-                  Her okutmada <b>{quickQty} adet</b> otomatik eklenir. Kamera açık kalır, art arda okutabilirsiniz.
-                </p>
-              )}
+              <p className="text-xs text-muted-foreground mt-2">
+                {quickMode ? (
+                  <>Her okutmada <b>{quickQty} adet</b> otomatik eklenir. Kamera açık kalır, art arda okutabilirsiniz.</>
+                ) : (
+                  <>Sayıya dokununca Adet alanına yazılır; +/− ile de ayarlayabilirsiniz.</>
+                )}
+              </p>
             </div>
           </CardContent>
         </Card>
