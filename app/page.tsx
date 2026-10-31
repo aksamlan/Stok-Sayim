@@ -1105,7 +1105,13 @@ function InventoryCounterContent() {
 
         {/* Camera Scanner Dialog */}
         <Dialog open={cameraOpen} onOpenChange={(open) => { if (!open) closeCamera() }}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent
+            className="sm:max-w-md"
+            onCloseAutoFocus={(e) => {
+              e.preventDefault()
+              if (!qtyDialogOpen) barcodeInputRef.current?.focus()
+            }}
+          >
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Camera className="h-5 w-5" />
@@ -1131,6 +1137,10 @@ function InventoryCounterContent() {
         <Dialog open={qtyDialogOpen} onOpenChange={(open) => { if (!open) closeQtyDialog() }}>
           <DialogContent
             className="sm:max-w-sm"
+            onCloseAutoFocus={(e) => {
+              e.preventDefault()
+              barcodeInputRef.current?.focus()
+            }}
             onKeyDown={(e) => {
               if (e.key >= "0" && e.key <= "9") {
                 e.preventDefault()
