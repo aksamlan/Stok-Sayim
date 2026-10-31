@@ -1127,38 +1127,28 @@ function InventoryCounterContent() {
                   <Zap className={`h-4 w-4 mr-1.5 ${quickMode ? "fill-current" : ""}`} />
                   Hızlı Ekleme {quickMode ? "Açık" : "Kapalı"}
                 </Button>
-                <div className="flex flex-wrap gap-1.5">
-                  {[1, 5, 10, 20, 50, 100].map((qty) => {
-                    const selected = quickMode
-                      ? quickQty === qty
-                      : quantityInput === String(qty)
-                    return (
+                {quickMode && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {[1, 5, 10, 20, 50, 100].map((qty) => (
                       <Button
                         key={qty}
                         type="button"
-                        variant={selected ? "default" : "outline"}
+                        variant={quickQty === qty ? "default" : "outline"}
                         size="sm"
-                        className={`min-w-[44px] font-mono ${selected ? "" : "bg-transparent"}`}
-                        onClick={() => {
-                          if (quickMode) {
-                            setQuickQty(qty)
-                          } else {
-                            setQuantityInput(String(qty))
-                            barcodeInputRef.current?.focus()
-                          }
-                        }}
+                        className={`min-w-[44px] font-mono ${quickQty === qty ? "" : "bg-transparent"}`}
+                        onClick={() => setQuickQty(qty)}
                       >
                         {qty}
                       </Button>
-                    )
-                  })}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <p className="text-xs text-muted-foreground mt-2">
                 {quickMode ? (
                   <>Her okutmada <b>{quickQty} adet</b> otomatik eklenir. Kamera açık kalır, art arda okutabilirsiniz.</>
                 ) : (
-                  <>Okutunca adet soran pencere açılır; buradaki Adet değeri o pencerede başlangıç olarak gelir.</>
+                  <>Okutunca adet soran pencere açılır.</>
                 )}
               </p>
             </div>
