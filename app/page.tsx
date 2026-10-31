@@ -66,7 +66,6 @@ function InventoryCounterContent() {
   const [renameDialogOpen, setRenameDialogOpen] = useState(false)
   const [renameValue, setRenameValue] = useState("")
   const [barcodeInput, setBarcodeInput] = useState("")
-  const [quantityInput, setQuantityInput] = useState("1")
   const [quickMode, setQuickMode] = useState(false)
   const [quickQty, setQuickQty] = useState(1)
   const [searchQuery, setSearchQuery] = useState("")
@@ -311,10 +310,10 @@ function InventoryCounterContent() {
   const openQtyDialog = useCallback((barcode: string) => {
     playBeep()
     setPendingBarcode(barcode)
-    setDialogQty(String(Math.max(1, parseInt(quantityInput) || 1)))
+    setDialogQty("1")
     dialogPristineRef.current = true
     setQtyDialogOpen(true)
-  }, [playBeep, quantityInput])
+  }, [playBeep])
 
   useEffect(() => {
     openQtyDialogRef.current = openQtyDialog
@@ -451,12 +450,6 @@ function InventoryCounterContent() {
     setBarcodeInput("")
     barcodeInputRef.current?.focus()
   }, [barcodeInput, quickMode, quickQty, addBarcodeToList, openQtyDialog])
-
-  // Adjust the manual quantity input with +/- buttons
-  const adjustQuantity = (delta: number) => {
-    const current = parseInt(quantityInput) || 1
-    setQuantityInput(String(Math.max(1, current + delta)))
-  }
 
   // Close camera and cleanup
   const closeCamera = useCallback(async () => {
@@ -1061,51 +1054,6 @@ function InventoryCounterContent() {
                   </Button>
                 </div>
               </div>
-              {!quickMode && (
-                <div className="w-full sm:w-52">
-                  <label htmlFor="quantity" className="text-sm font-medium mb-2 block">
-                    Adet
-                  </label>
-                  <div className="flex gap-1.5">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-12 w-12 shrink-0 bg-transparent"
-                      onClick={() => adjustQuantity(-1)}
-                      title="Adedi azalt"
-                    >
-                      <Minus className="h-4 w-4" />
-                    </Button>
-                    <Input
-                      id="quantity"
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={quantityInput}
-                      onChange={(e) => {
-                        const val = e.target.value.replace(/[^0-9]/g, "")
-                        setQuantityInput(val)
-                      }}
-                      onFocus={(e) => e.target.select()}
-                      onBlur={() => {
-                        if (!quantityInput || parseInt(quantityInput) < 1) {
-                          setQuantityInput("1")
-                        }
-                      }}
-                      className="font-mono text-lg h-12 text-center"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-12 w-12 shrink-0 bg-transparent"
-                      onClick={() => adjustQuantity(1)}
-                      title="Adedi artır"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              )}
               <div className="flex items-end">
                 <Button type="submit" className="h-12 px-6 w-full sm:w-auto">
                   <Plus className="h-4 w-4 mr-2" />
@@ -1210,6 +1158,22 @@ function InventoryCounterContent() {
             </div>
             <div className="h-16 rounded-md border bg-muted/30 flex items-center justify-center font-mono text-4xl font-bold">
               {dialogQty || <span className="text-muted-foreground text-2xl">adet</span>}
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {[1, 5, 10, 20].map((qty) => (
+                <Button
+                  key={qty}
+                  type="button"
+                  variant={dialogQty === String(qty) ? "default" : "secondary"}
+                  className="h-11 text-lg font-mono"
+                  onClick={() => {
+                    setDialogQty(String(qty))
+                    dialogPristineRef.current = true
+                  }}
+                >
+                  {qty}
+                </Button>
+              ))}
             </div>
             <div className="grid grid-cols-3 gap-2">
               {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
