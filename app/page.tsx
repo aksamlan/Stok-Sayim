@@ -1,7 +1,7 @@
 "use client"
 
 import React, { Suspense, useState, useEffect, useRef, useCallback } from "react"
-import { Plus, Minus, Trash2, Download, Upload, Moon, Sun, Search, Volume2, VolumeX, RotateCcw, Camera, ScanBarcode, Package, AlertTriangle, CheckCircle2, XCircle, Zap, ClipboardList, Pencil, PlusCircle } from "lucide-react"
+import { Plus, Minus, Trash2, Download, Upload, Moon, Sun, Search, Volume2, VolumeX, RotateCcw, Camera, ScanBarcode, Package, AlertTriangle, CheckCircle2, XCircle, Zap, ClipboardList, Pencil, PlusCircle, Delete } from "lucide-react"
 import { Toaster, toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -78,6 +78,9 @@ function InventoryCounterContent() {
   const [activeTab, setActiveTab] = useState<"count" | "compare">("count")
   const [deleteConfirmBarcode, setDeleteConfirmBarcode] = useState<string | null>(null)
   const [decrementConfirmBarcode, setDecrementConfirmBarcode] = useState<string | null>(null)
+  const [qtyDialogOpen, setQtyDialogOpen] = useState(false)
+  const [pendingBarcode, setPendingBarcode] = useState<string | null>(null)
+  const [dialogQty, setDialogQty] = useState("1")
 
   const barcodeInputRef = useRef<HTMLInputElement>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -90,6 +93,8 @@ function InventoryCounterContent() {
   const quickModeRef = useRef(false)
   const quickQtyRef = useRef(1)
   const lastCamScanRef = useRef<{ code: string; time: number }>({ code: "", time: 0 })
+  const dialogPristineRef = useRef(true)
+  const openQtyDialogRef = useRef<((barcode: string) => void) | null>(null)
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -302,6 +307,55 @@ function InventoryCounterContent() {
     addBarcodeRef.current = addBarcodeToList
   }, [addBarcodeToList])
 
+  // Open the quantity popup for a scanned barcode (normal mode)
+  const openQtyDialog = useCallback((barcode: string) => {
+    playBeep()
+    setPendingBarcode(barcode)
+    setDialogQty(String(Math.max(1, parseInt(quantityInput) || 1)))
+    dialogPristineRef.current = true
+    setQtyDialogOpen(true)
+  }, [playBeep, quantityInput])
+
+  useEffect(() => {
+    openQtyDialogRef.current = openQtyDialog
+  }, [openQtyDialog])
+
+  // On-screen numpad handlers for the quantity popup
+  const pressDialogDigit = (d: string) => {
+    setDialogQty(prev => {
+      if (dialogPristineRef.current) {
+        dialogPristineRef.current = false
+        return d
+      }
+      if (prev === "0" || prev === "") return d
+      if (prev.length >= 5) return prev
+      return prev + d
+    })
+  }
+
+  const dialogBackspace = () => {
+    dialogPristineRef.current = false
+    setDialogQty(prev => prev.slice(0, -1))
+  }
+
+  const dialogClear = () => {
+    dialogPristineRef.current = false
+    setDialogQty("")
+  }
+
+  const closeQtyDialog = () => {
+    setQtyDialogOpen(false)
+    setPendingBarcode(null)
+    barcodeInputRef.current?.focus()
+  }
+
+  const confirmQtyDialog = () => {
+    if (!pendingBarcode) return
+    const qty = Math.max(1, parseInt(dialogQty) || 1)
+    addBarcodeToList(pendingBarcode, qty)
+    closeQtyDialog()
+  }
+
   // Camera scanner setup/teardown using dynamic import
   useEffect(() => {
     if (!cameraOpen) return
@@ -350,13 +404,13 @@ function InventoryCounterContent() {
                 addBarcodeRef.current(code, quickQtyRef.current)
               }
             } else {
-              // Normal mode: add once and close camera
+              // Normal mode: close camera and ask for the quantity in the popup
               lastCamScanRef.current = { code, time: now }
-              if (addBarcodeRef.current) {
-                addBarcodeRef.current(code, 1)
-              }
               html5QrCode.stop().catch(() => {})
               setCameraOpen(false)
+              if (openQtyDialogRef.current) {
+                openQtyDialogRef.current(code)
+              }
             }
           },
           () => {
@@ -386,16 +440,17 @@ function InventoryCounterContent() {
     const barcode = barcodeInput.trim()
     if (!barcode) return
 
-    const qty = quickMode
-      ? quickQty
-      : Math.max(1, parseInt(quantityInput) || 1)
-
-    addBarcodeToList(barcode, qty)
+    if (quickMode) {
+      // Quick mode: add instantly with the preset quantity
+      addBarcodeToList(barcode, quickQty)
+    } else {
+      // Normal mode: ask for the quantity with the on-screen numpad popup
+      openQtyDialog(barcode)
+    }
 
     setBarcodeInput("")
-    setQuantityInput("1")
     barcodeInputRef.current?.focus()
-  }, [barcodeInput, quantityInput, quickMode, quickQty, addBarcodeToList])
+  }, [barcodeInput, quickMode, quickQty, addBarcodeToList, openQtyDialog])
 
   // Adjust the manual quantity input with +/- buttons
   const adjustQuantity = (delta: number) => {
@@ -770,6 +825,11 @@ function InventoryCounterContent() {
     return results
   }, [stockItems, items])
 
+  // Existing quantity of the barcode waiting in the popup
+  const pendingExisting = pendingBarcode
+    ? items.find(i => i.barcode === pendingBarcode)
+    : undefined
+
   // Filter items based on search query
   const filteredItems = items.filter(item =>
     item.barcode.toLowerCase().includes(searchQuery.toLowerCase())
@@ -1098,7 +1158,7 @@ function InventoryCounterContent() {
                 {quickMode ? (
                   <>Her okutmada <b>{quickQty} adet</b> otomatik eklenir. Kamera açık kalır, art arda okutabilirsiniz.</>
                 ) : (
-                  <>Sayıya dokununca Adet alanına yazılır; +/− ile de ayarlayabilirsiniz.</>
+                  <>Okutunca adet soran pencere açılır; buradaki Adet değeri o pencerede başlangıç olarak gelir.</>
                 )}
               </p>
             </div>
@@ -1125,6 +1185,99 @@ function InventoryCounterContent() {
                   Hızlı mod: her okutmada {quickQty} adet eklenir, kamera açık kalır
                 </p>
               )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Quantity Numpad Dialog (normal mode) */}
+        <Dialog open={qtyDialogOpen} onOpenChange={(open) => { if (!open) closeQtyDialog() }}>
+          <DialogContent
+            className="sm:max-w-sm"
+            onKeyDown={(e) => {
+              if (e.key >= "0" && e.key <= "9") {
+                e.preventDefault()
+                pressDialogDigit(e.key)
+              } else if (e.key === "Backspace") {
+                e.preventDefault()
+                dialogBackspace()
+              } else if (e.key === "Enter") {
+                e.preventDefault()
+                confirmQtyDialog()
+              }
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <ScanBarcode className="h-5 w-5 text-primary" />
+                Adet Girin
+              </DialogTitle>
+            </DialogHeader>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="font-mono font-bold break-all">{pendingBarcode}</span>
+              {pendingExisting && (
+                <Badge variant="secondary">Listede: {pendingExisting.quantity} adet</Badge>
+              )}
+            </div>
+            <div className="h-16 rounded-md border bg-muted/30 flex items-center justify-center font-mono text-4xl font-bold">
+              {dialogQty || <span className="text-muted-foreground text-2xl">adet</span>}
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
+                <Button
+                  key={d}
+                  type="button"
+                  variant="outline"
+                  className="h-14 text-2xl font-mono bg-transparent"
+                  onClick={() => pressDialogDigit(d)}
+                >
+                  {d}
+                </Button>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                className="h-14 text-lg bg-transparent text-muted-foreground"
+                onClick={dialogClear}
+                title="Temizle"
+              >
+                C
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-14 text-2xl font-mono bg-transparent"
+                onClick={() => pressDialogDigit("0")}
+              >
+                0
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-14 bg-transparent"
+                onClick={dialogBackspace}
+                title="Sil"
+              >
+                <Delete className="h-6 w-6" />
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-12 bg-transparent"
+                onClick={closeQtyDialog}
+              >
+                İptal
+              </Button>
+              <Button
+                type="button"
+                className="h-12 text-lg"
+                onClick={confirmQtyDialog}
+                disabled={!dialogQty || parseInt(dialogQty) < 1}
+              >
+                <Plus className="h-5 w-5 mr-1.5" />
+                Ekle
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
