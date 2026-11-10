@@ -16,7 +16,7 @@ const modes = [
     points: [
       { icon: Zap, text: "Kurulum yok, hemen başla" },
       { icon: WifiOff, text: "İnternetsiz çalışır" },
-      { icon: FileSpreadsheet, text: "Excel / CSV / PDF çıktısı" },
+      { icon: FileSpreadsheet, text: "Excel / CSV çıktısı" },
     ],
     tone: "bg-primary",
   },
@@ -31,7 +31,7 @@ const modes = [
       { icon: FileSpreadsheet, text: "Ürün kataloğu ve karşılaştırma" },
       { icon: Zap, text: "Canlı yönetici panosu" },
     ],
-    tone: "bg-slate-800 dark:bg-slate-700",
+    tone: "bg-[oklch(0.33_0.08_258)] dark:bg-[oklch(0.38_0.07_258)]",
   },
 ]
 
@@ -56,7 +56,13 @@ export default function Home() {
         </div>
 
         <div className="mb-5 sm:mb-8 text-center">
-          <h2 className="text-2xl sm:text-3xl font-bold">Stok Sayım</h2>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/marka/logo"
+            alt="Stokzen"
+            className="mx-auto mb-3 h-24 sm:h-32 w-auto object-contain"
+          />
+          <h2 className="text-xl sm:text-2xl font-bold">Stok Sayım</h2>
           <p className="mt-1.5 text-sm text-muted-foreground">
             Barkod okutarak sayım yapın. Nasıl devam etmek istersiniz?
           </p>

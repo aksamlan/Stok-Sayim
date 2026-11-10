@@ -10,24 +10,12 @@ const _geistMono = Geist_Mono({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: 'Stokzen Stok Sayım - Barkod ile Envanter Sayımı',
   description:
-    'Stokzen ile barkod okutarak tek başına veya ekipçe stok sayımı yapın; Excel/CSV/PDF çıktısı alın.',
+    'Stokzen ile barkod okutarak tek başına veya ekipçe stok sayımı yapın; Excel/CSV çıktısı alın.',
   applicationName: 'Stokzen Stok Sayım',
   icons: {
-    icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
-    ],
-    apple: '/apple-icon.png',
+    icon: [{ url: '/marka/icon', type: 'image/png' }],
+    shortcut: '/marka/icon',
+    apple: '/marka/icon',
   },
 }
 

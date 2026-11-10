@@ -15,7 +15,6 @@ import {
   LogOut,
   Moon,
   Play,
-  Printer,
   Search,
   Share2,
   Square,
@@ -65,7 +64,6 @@ import {
 import {
   downloadStoreReportCSV,
   downloadStoreReportXLSX,
-  printStoreReportPDF,
   shareStoreReport,
   type ShareOutcome,
   type StoreReportRow,
@@ -291,7 +289,7 @@ export default function PanelPage() {
     return all
   }
 
-  const runExport = async (kind: "xlsx" | "csv" | "pdf" | "share") => {
+  const runExport = async (kind: "xlsx" | "csv" | "share") => {
     if (!auth || !viewSession || exportBusy) return
     setExportBusy(true)
     try {
@@ -308,10 +306,6 @@ export default function PanelPage() {
       } else if (kind === "csv") {
         downloadStoreReportCSV(rows, store, session)
         toast.success("CSV indirildi")
-      } else if (kind === "pdf") {
-        if (!printStoreReportPDF(rows, store, session)) {
-          toast.error("Yazdırma penceresi açılamadı — tarayıcı engelliyor olabilir")
-        }
       } else {
         const outcome: ShareOutcome = await shareStoreReport(rows, store, session)
         if (outcome === "file" || outcome === "text") toast.success("Paylaşıldı")
@@ -552,9 +546,6 @@ export default function PanelPage() {
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => void runExport("csv")}>
                       <FileText /> CSV
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => void runExport("pdf")}>
-                      <Printer /> PDF / Yazdır
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => void runExport("share")}>
                       <Share2 /> Paylaş

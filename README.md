@@ -13,7 +13,7 @@ Modu** ile aynı anda 10+ kişi birlikte.
 - 📡 Çevrimdışı çalışma: internet kesilse de sayım devam eder, bağlantı
   gelince otomatik senkronlanır
 - 📊 Canlı yönetici panosu: toplamlar, sayımcı kırılımı, kategori kırılımı,
-  beklenen/sayılan karşılaştırması, XLSX/CSV/PDF dışa aktarma
+  beklenen/sayılan karşılaştırması, XLSX/CSV dışa aktarma
 - 🛡️ `/yonetim` platform paneli: tüm mağazalar, aktivite akışı, şifre
   sıfırlama, mağaza silme
 

@@ -76,7 +76,13 @@ export function joinStore(
   password: string,
   counterName: string,
   pin: string
-): { token: string; role: "counter" | "admin"; storeId: string; storeName: string } {
+): {
+  token: string
+  role: "counter" | "admin"
+  storeId: string
+  storeName: string
+  counter: string
+} {
   const row = db
     .prepare("SELECT * FROM stores WHERE code = ?")
     .get(code.trim().toUpperCase()) as StoreRow | undefined
@@ -96,33 +102,44 @@ export function joinStore(
       exp,
       tv: row.token_version,
     })
-    return { token, role: "admin", storeId: row.id, storeName: row.name }
+    return { token, role: "admin", storeId: row.id, storeName: row.name, counter: "" }
   }
   if (verifyPassword(password, row.count_pw_hash)) {
-    const counter = counterName.trim()
-    if (!counter) throw new ApiError(400, "Adını yazman gerekli")
-    if (pin.trim().length < 4) {
-      throw new ApiError(400, "PIN en az 4 haneli olmalı")
+    // Ad büyük/küçük harf ve fazla boşluktan bağımsız aynı kişidir ("ayşe" =
+    // "Ayşe  "): aynı kişi tekrar girince yeni sayımcı açılmaz.
+    const typed = counterName.trim().replace(/\s+/g, " ")
+    if (!typed) throw new ApiError(400, "Adını yazman gerekli")
+    const pinTyped = pin.trim()
+    // Kişisel PIN İSTEĞE BAĞLI. Verilirse en az 4 haneli olmalı ve adı korur.
+    if (pinTyped && pinTyped.length < 4) {
+      throw new ApiError(400, "PIN en az 4 haneli olmalı (istemiyorsan boş bırak)")
     }
-    // PIN ismi korur: ilk giren PIN'ini kaydeder, aynı ismi yanlış PIN'le
-    // giren başka biri reddedilir — iki kişinin sayımı asla birbirine karışmaz.
     const existing = db
-      .prepare("SELECT pin_hash, created_at FROM counters WHERE store_id = ? AND name = ?")
-      .get(row.id, counter) as { pin_hash: string; created_at: number } | undefined
+      .prepare(
+        "SELECT name, pin_hash, created_at FROM counters WHERE store_id = ? AND tr_lower(name) = tr_lower(?)"
+      )
+      .get(row.id, typed) as
+      | { name: string; pin_hash: string; created_at: number }
+      | undefined
     let generation: number
+    let counter = typed
     if (existing) {
-      if (!verifyPassword(pin.trim(), existing.pin_hash)) {
-        throw new ApiError(
-          401,
-          "Bu isim kayıtlı ama PIN yanlış. PIN'ini doğru gir ya da farklı bir isim seç."
-        )
+      counter = existing.name // kayıtlı yazımı kullan
+      if (existing.pin_hash) {
+        // PIN'li isim: doğru PIN olmadan başkası bu adla giremez.
+        if (!pinTyped || !verifyPassword(pinTyped, existing.pin_hash)) {
+          throw new ApiError(
+            401,
+            "Bu ad PIN ile korunuyor. Kişisel PIN'ini doğru gir ya da farklı bir ad yaz."
+          )
+        }
       }
       generation = existing.created_at
     } else {
       generation = Date.now()
       db.prepare(
         "INSERT INTO counters (store_id, name, pin_hash, created_at) VALUES (?, ?, ?, ?)"
-      ).run(row.id, counter, hashPassword(pin.trim()), generation)
+      ).run(row.id, counter, pinTyped ? hashPassword(pinTyped) : "", generation)
     }
     markSeen()
     const token = signToken(db, {
@@ -133,7 +150,7 @@ export function joinStore(
       tv: row.token_version,
       cg: generation,
     })
-    return { token, role: "counter", storeId: row.id, storeName: row.name }
+    return { token, role: "counter", storeId: row.id, storeName: row.name, counter }
   }
   throw new ApiError(401, "Kod veya şifre hatalı")
 }
@@ -198,4 +215,26 @@ export function closeSession(db: DatabaseSync, storeId: string, sessionId: strin
     storeId,
     sessionId
   )
+}
+
+// Giriş ekranı: mağaza kodu + sayım (ya da yönetici) şifresiyle önceki sayımcı
+// adlarını döndürür — kişi adını yeniden yazmak yerine listeden seçer.
+export function listCounterNamesForJoin(
+  db: DatabaseSync,
+  code: string,
+  password: string
+): { name: string; hasPin: boolean }[] {
+  const row = db
+    .prepare("SELECT * FROM stores WHERE code = ?")
+    .get(code.trim().toUpperCase()) as StoreRow | undefined
+  if (
+    !row ||
+    !(verifyPassword(password, row.count_pw_hash) || verifyPassword(password, row.admin_pw_hash))
+  )
+    throw new ApiError(401, "Kod veya şifre hatalı")
+  return (
+    db
+      .prepare("SELECT name, pin_hash FROM counters WHERE store_id = ? ORDER BY name")
+      .all(row.id) as { name: string; pin_hash: string }[]
+  ).map((r) => ({ name: r.name, hasPin: r.pin_hash !== "" }))
 }

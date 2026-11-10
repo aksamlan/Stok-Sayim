@@ -14,6 +14,7 @@ import {
 import Link from "next/link"
 import { useCallback, useEffect, useState } from "react"
 import { Toaster, toast } from "sonner"
+import { BrandSettings } from "@/components/brand-settings"
 import { PoweredByStokzen, StokzenWordmark } from "@/components/stokzen"
 import {
   AlertDialog,
@@ -391,6 +392,8 @@ export default function YonetimPage() {
                 )}
               </CardContent>
             </Card>
+
+            <BrandSettings token={token} />
 
             <Card className="mb-3 py-0 gap-0">
               <CardContent className="px-3 py-2.5 flex items-center gap-3 flex-wrap">

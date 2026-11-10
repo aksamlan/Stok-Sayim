@@ -6,6 +6,7 @@ import {
   createSession,
   createStore,
   joinStore,
+  listCounterNamesForJoin,
   listSessions,
   resetCounterPin,
 } from "../../lib/server/stores"
@@ -102,4 +103,34 @@ test("stores are isolated: unknown code is 401", () => {
   } catch (e) {
     expect((e as ApiError).status).toBe(401)
   }
+})
+
+test("PIN'siz giriş: aynı ad (büyük/küçük harf, boşluk fark etmez) aynı sayımcıdır", () => {
+  const { db, code } = setup()
+  const a = joinStore(db, code, "say123", "Ayşe", "")
+  const b = joinStore(db, code, "say123", "  ayşe ", "")
+  const c = joinStore(db, code, "say123", "AYŞE", "")
+  expect(a.counter).toBe("Ayşe")
+  expect(b.counter).toBe("Ayşe") // kayıtlı yazım korunur
+  expect(c.counter).toBe("Ayşe")
+  expect(verifyToken(db, b.token)?.cg).toBe(verifyToken(db, a.token)?.cg)
+  expect(listCounterNamesForJoin(db, code, "say123")).toEqual([{ name: "Ayşe", hasPin: false }])
+  // Türkçe İ/ı: "ISIK" ≠ "ışık" değil, tr-locale ile eşleşmeli
+  joinStore(db, code, "say123", "Işık", "")
+  expect(joinStore(db, code, "say123", "ışık", "").counter).toBe("Işık")
+  expect(listCounterNamesForJoin(db, code, "say123")).toHaveLength(2)
+})
+
+test("PIN'li ad PIN'siz alınamaz; ad listesi yanlış şifreyle verilmez", () => {
+  const { db, code } = setup()
+  joinStore(db, code, "say123", "Mehmet", "4321")
+  try {
+    joinStore(db, code, "say123", "mehmet", "")
+    expect.unreachable()
+  } catch (e) {
+    expect((e as ApiError).status).toBe(401)
+  }
+  expect(joinStore(db, code, "say123", "mehmet", "4321").counter).toBe("Mehmet")
+  expect(listCounterNamesForJoin(db, code, "say123")).toEqual([{ name: "Mehmet", hasPin: true }])
+  expect(() => listCounterNamesForJoin(db, code, "yanlis")).toThrow()
 })

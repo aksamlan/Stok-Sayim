@@ -1,4 +1,4 @@
-// Dışa aktarma ve paylaşma yardımcıları: XLSX, CSV, PDF (yazdırma) ve Web Share.
+// Dışa aktarma ve paylaşma yardımcıları: XLSX, CSV ve Web Share.
 
 export interface CountRow {
   barcode: string
@@ -37,13 +37,6 @@ const safeName = (name: string) =>
     .replace(/[\\/:*?"<>|]+/g, "")
     .replace(/\s+/g, "_")
     .slice(0, 40) || "sayim"
-
-const escHtml = (s: string) =>
-  s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
 
 // Noktalı virgül/çift tırnak içeren değerleri güvenli yaz. Ayrıca =,+,@ ile
 // başlayan metinleri ' ile etkisizleştir: Excel bunları formül olarak çalıştırır
@@ -121,7 +114,7 @@ const makeCountXLSXBlob = async (items: CountRow[]): Promise<Blob> => {
   ws["!cols"] = [{ wch: 22 }, { wch: 10 }]
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, "Stok Sayım")
-  const out = XLSX.write(wb, { bookType: "xlsx", type: "array" })
+  const out = XLSX.write(wb, { bookType: "xlsx", type: "array", compression: true })
   return new Blob([out], { type: XLSX_MIME })
 }
 
@@ -140,7 +133,7 @@ const makeCompareXLSXBlob = async (rows: CompareRow[]): Promise<Blob> => {
   ws["!cols"] = [{ wch: 22 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 12 }]
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, "Karşılaştırma")
-  const out = XLSX.write(wb, { bookType: "xlsx", type: "array" })
+  const out = XLSX.write(wb, { bookType: "xlsx", type: "array", compression: true })
   return new Blob([out], { type: XLSX_MIME })
 }
 
@@ -161,88 +154,6 @@ export const downloadCompareXLSX = async (
     blob,
     `karsilastirma_${safeName(sessionName)}_${todayStr()}.xlsx`
   )
-}
-
-// ---------------------------------------------------------------- PDF (yazdırma penceresi)
-
-const PRINT_STYLE = `
-  * { box-sizing: border-box; }
-  body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #111; margin: 24px; }
-  h1 { font-size: 20px; margin: 0 0 4px; }
-  .meta { color: #555; font-size: 12px; margin-bottom: 4px; }
-  .totals { font-size: 13px; margin: 10px 0 16px; }
-  .totals b { font-size: 15px; }
-  table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  th { text-align: left; background: #f1f5f9; }
-  th, td { border: 1px solid #cbd5e1; padding: 6px 8px; }
-  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-  .mono { font-family: ui-monospace, Consolas, monospace; }
-  tr.match td { background: #dcfce7; }
-  tr.difference td { background: #fef3c7; }
-  tr.only-stock td { background: #fee2e2; }
-  tr.only-count td { background: #dbeafe; }
-  @media print {
-    body { margin: 10mm; }
-    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  }
-`
-
-const openPrintWindow = (title: string, bodyHtml: string): boolean => {
-  const w = window.open("", "_blank")
-  if (!w) return false
-  w.document.write(
-    `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>${escHtml(
-      title
-    )}</title><style>${PRINT_STYLE}</style></head><body>${bodyHtml}` +
-      `<script>window.onload=function(){setTimeout(function(){window.print()},250)}</script></body></html>`
-  )
-  w.document.close()
-  return true
-}
-
-export const printCountPDF = (
-  items: CountRow[],
-  sessionName: string
-): boolean => {
-  const totalQty = items.reduce((s, i) => s + i.quantity, 0)
-  const rows = items
-    .map(
-      i =>
-        `<tr><td class="mono">${escHtml(i.barcode)}</td><td class="num">${i.quantity}</td></tr>`
-    )
-    .join("")
-  const body = `
-    <h1>Stok Sayım Raporu</h1>
-    <p class="meta">Sayım: ${escHtml(sessionName)} · ${escHtml(dateTimeStr())}</p>
-    <p class="totals">Toplam ürün: <b>${totalQty}</b> &nbsp;·&nbsp; Farklı barkod: <b>${items.length}</b></p>
-    <table><thead><tr><th>Barkod</th><th class="num">Adet</th></tr></thead><tbody>${rows}</tbody></table>`
-  return openPrintWindow(`Stok Sayım - ${sessionName}`, body)
-}
-
-export const printComparePDF = (
-  rows: CompareRow[],
-  sessionName: string
-): boolean => {
-  const counts = {
-    match: rows.filter(r => r.status === "match").length,
-    difference: rows.filter(r => r.status === "difference").length,
-    onlyStock: rows.filter(r => r.status === "only-stock").length,
-    onlyCount: rows.filter(r => r.status === "only-count").length,
-  }
-  const trs = rows
-    .map(
-      r =>
-        `<tr class="${r.status}"><td class="mono">${escHtml(r.barcode)}</td>` +
-        `<td class="num">${r.stockQty || "-"}</td><td class="num">${r.countQty || "-"}</td>` +
-        `<td class="num">${diffText(r)}</td><td>${STATUS_TEXT[r.status]}</td></tr>`
-    )
-    .join("")
-  const body = `
-    <h1>Stok Karşılaştırma Raporu</h1>
-    <p class="meta">Sayım: ${escHtml(sessionName)} · ${escHtml(dateTimeStr())}</p>
-    <p class="totals">Eşit: <b>${counts.match}</b> · Farklı: <b>${counts.difference}</b> · Sayılmadı: <b>${counts.onlyStock}</b> · Fazla: <b>${counts.onlyCount}</b></p>
-    <table><thead><tr><th>Barkod</th><th class="num">Stok</th><th class="num">Sayım</th><th class="num">Fark</th><th>Durum</th></tr></thead><tbody>${trs}</tbody></table>`
-  return openPrintWindow(`Karşılaştırma - ${sessionName}`, body)
 }
 
 // ---------------------------------------------------------------- Paylaşma
@@ -406,39 +317,11 @@ export const downloadStoreReportXLSX = async (
   ]
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, "Sayım Raporu")
-  const out = XLSX.write(wb, { bookType: "xlsx", type: "array" })
+  const out = XLSX.write(wb, { bookType: "xlsx", type: "array", compression: true })
   downloadBlob(
     new Blob([out], { type: XLSX_MIME }),
     `${storeFileBase(storeName, sessionName)}.xlsx`
   )
-}
-
-export const printStoreReportPDF = (
-  rows: StoreReportRow[],
-  storeName: string,
-  sessionName: string
-): boolean => {
-  const counts = {
-    match: rows.filter(r => r.status === "match").length,
-    difference: rows.filter(r => r.status === "difference").length,
-    onlyStock: rows.filter(r => r.status === "only-stock").length,
-    onlyCount: rows.filter(r => r.status === "only-count").length,
-  }
-  const trs = rows
-    .map(
-      r =>
-        `<tr class="${r.status}"><td class="mono">${escHtml(r.barcode)}</td>` +
-        `<td>${escHtml(r.name ?? "-")}</td><td>${escHtml(r.category ?? "-")}</td>` +
-        `<td class="num">${escHtml(String(r.expected ?? "-"))}</td><td class="num">${escHtml(String(r.counted))}</td>` +
-        `<td class="num">${storeDiffText(r) || "-"}</td><td>${STATUS_TEXT[r.status]}</td></tr>`
-    )
-    .join("")
-  const body = `
-    <h1>Stokzen Sayım Raporu</h1>
-    <p class="meta">Mağaza: ${escHtml(storeName)} · Sayım: ${escHtml(sessionName)} · ${escHtml(dateTimeStr())}</p>
-    <p class="totals">Eşit: <b>${counts.match}</b> · Farklı: <b>${counts.difference}</b> · Sayılmadı: <b>${counts.onlyStock}</b> · Listede yok: <b>${counts.onlyCount}</b></p>
-    <table><thead><tr><th>Barkod</th><th>Ürün Adı</th><th>Kategori</th><th class="num">Beklenen</th><th class="num">Sayılan</th><th class="num">Fark</th><th>Durum</th></tr></thead><tbody>${trs}</tbody></table>`
-  return openPrintWindow(`Stokzen - ${storeName} - ${sessionName}`, body)
 }
 
 export const shareStoreReport = (

@@ -55,3 +55,18 @@ test("yonetici-sifre scripti meta'yı önceden yarattıysa uygulama yine açıl�
   expect(getMeta(again, "schema_version")).not.toBeNull()
   again.close()
 })
+
+test("marka görseli: PNG kabul, SVG/bozuk reddedilir, sıfırlayınca varsayılana döner", async () => {
+  const { setBrand, resetBrand, readBrand, brandStatus } = await import("../../lib/server/brand")
+  const db = openDatabase(":memory:")
+  const png = Buffer.from("89504e470d0a1a0a0000000d4948445200000001000000010806000000", "hex")
+  setBrand(db, "icon", `data:image/png;base64,${png.toString("base64")}`)
+  expect(brandStatus(db).iconCustom).toBe(true)
+  expect(readBrand(db, "icon").mime).toBe("image/png")
+  expect(() =>
+    setBrand(db, "logo", `data:image/svg+xml;base64,${Buffer.from("<svg onload=alert(1)/>").toString("base64")}`)
+  ).toThrow()
+  expect(() => setBrand(db, "logo", "data:image/png;base64,AAAA")).toThrow()
+  resetBrand(db, "icon")
+  expect(brandStatus(db).iconCustom).toBe(false)
+})

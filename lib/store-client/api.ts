@@ -62,6 +62,7 @@ export type JoinResult = {
   role: Role
   storeId: string
   storeName: string
+  counter?: string
 }
 
 export function apiCreateStore(body: {
@@ -89,6 +90,13 @@ export function apiJoinStore(body: {
   pin?: string
 }): Promise<JoinResult> {
   return request("/api/store/join", { method: "POST", body })
+}
+
+export function apiJoinNames(body: {
+  code: string
+  password: string
+}): Promise<{ counters: { name: string; hasPin: boolean }[] }> {
+  return request("/api/store/counters", { method: "POST", body })
 }
 
 export function apiCounters(

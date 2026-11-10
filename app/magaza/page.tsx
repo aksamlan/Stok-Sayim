@@ -29,6 +29,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   apiCreateStore,
   apiJoinStore,
+  apiJoinNames,
   apiStartVerification,
 } from "@/lib/store-client/api"
 import { clearAuth, loadAuth, saveAuth } from "@/lib/store-client/session"
@@ -45,6 +46,9 @@ export default function MagazaPage() {
   const [joinPassword, setJoinPassword] = useState("")
   const [joinName, setJoinName] = useState("")
   const [joinPin, setJoinPin] = useState("")
+  const [joinRole, setJoinRole] = useState<"counter" | "admin">("counter")
+  const [knownNames, setKnownNames] = useState<{ name: string; hasPin: boolean }[]>([])
+  const [showPin, setShowPin] = useState(false)
 
   const [newName, setNewName] = useState("")
   const [newEmail, setNewEmail] = useState("")
@@ -60,7 +64,27 @@ export default function MagazaPage() {
 
   useEffect(() => {
     setExisting(loadAuth())
+    try {
+      const last = JSON.parse(localStorage.getItem("magazaSon") ?? "null")
+      if (last?.code) setJoinCode(String(last.code))
+      if (last?.name) setJoinName(String(last.name))
+    } catch {}
   }, [])
+
+  // Kod + sayım şifresi girilince önceki sayımcı adlarını getir: kişi adını
+  // yeniden yazmak yerine seçer, aynı kişi iki kez "yeni sayımcı" olmaz.
+  useEffect(() => {
+    if (joinRole !== "counter" || joinCode.trim().length < 4 || !joinPassword) {
+      setKnownNames([])
+      return
+    }
+    const t = setTimeout(() => {
+      apiJoinNames({ code: joinCode, password: joinPassword })
+        .then((r) => setKnownNames(r.counters))
+        .catch(() => setKnownNames([]))
+    }, 600)
+    return () => clearTimeout(t)
+  }, [joinRole, joinCode, joinPassword])
 
   const target = (role: "counter" | "admin") =>
     role === "admin" ? "/magaza/panel" : "/magaza/sayim"
@@ -73,20 +97,34 @@ export default function MagazaPage() {
       const res = await apiJoinStore({
         code: joinCode,
         password: joinPassword,
-        counterName: joinName,
-        pin: joinPin,
+        counterName: joinRole === "admin" ? "" : joinName,
+        pin: joinRole === "admin" ? "" : joinPin,
       })
       saveAuth({
         token: res.token,
         role: res.role,
         storeId: res.storeId,
         storeName: res.storeName,
-        counter: res.role === "counter" ? joinName.trim() : "",
+        counter: res.role === "counter" ? (res.counter ?? joinName.trim()) : "",
         code: joinCode.trim().toUpperCase(),
       })
+      try {
+        localStorage.setItem(
+          "magazaSon",
+          JSON.stringify({
+            code: joinCode.trim().toUpperCase(),
+            name: res.role === "counter" ? (res.counter ?? joinName.trim()) : "",
+          })
+        )
+      } catch {}
       router.push(target(res.role))
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Giriş başarısız")
+      const msg = err instanceof Error ? err.message : "Giriş başarısız"
+      toast.error(
+        joinRole === "admin" && msg.startsWith("Adını yazman")
+          ? "Yönetici şifresi hatalı (sayım şifresi değil, yönetici şifresini yaz)"
+          : msg
+      )
       setBusy(false)
     }
   }
@@ -266,15 +304,35 @@ export default function MagazaPage() {
                   <CardHeader>
                     <CardTitle className="text-base">Sayıma katıl</CardTitle>
                     <CardDescription>
-                      Mağaza kodu ve şifreyi yöneticinden al. Yönetici şifresiyle
-                      girersen panoya gidersin.
+                      Önce kim olduğunu seç. Mağaza kodunu yöneticiden alırsın.
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <form onSubmit={handleJoin} className="space-y-3">
+                      <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1" role="radiogroup" aria-label="Giriş türü">
+                        {([
+                          ["counter", "Sayımcıyım"],
+                          ["admin", "Yöneticiyim"],
+                        ] as const).map(([r, label]) => (
+                          <button
+                            key={r}
+                            type="button"
+                            role="radio"
+                            aria-checked={joinRole === r}
+                            onClick={() => setJoinRole(r)}
+                            className={`h-9 rounded-md text-sm font-semibold transition-colors ${
+                              joinRole === r
+                                ? "bg-card text-primary shadow-sm ring-1 ring-border"
+                                : "text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
                       <div className="space-y-1">
                         <label className="block text-xs font-medium text-muted-foreground">
-                          Mağaza Kodu
+                          Mağaza kodu
                         </label>
                         <Input
                           value={joinCode}
@@ -288,48 +346,107 @@ export default function MagazaPage() {
                       </div>
                       <div className="space-y-1">
                         <label className="block text-xs font-medium text-muted-foreground">
-                          Şifre
+                          {joinRole === "admin" ? "Yönetici şifresi" : "Sayım şifresi"}
                         </label>
                         <Input
                           type="password"
                           value={joinPassword}
                           onChange={(e) => setJoinPassword(e.target.value)}
                           className="h-11"
+                          autoComplete="off"
                           required
                         />
+                        {joinRole === "counter" && (
+                          <p className="text-[11px] text-muted-foreground">
+                            Mağaza yöneticisinin sana verdiği ortak şifre.
+                          </p>
+                        )}
                       </div>
-                      <div className="grid grid-cols-[1fr_auto] gap-2">
-                        <div className="space-y-1">
-                          <label className="block text-xs font-medium text-muted-foreground">
-                            Adın (sayımcılar için)
-                          </label>
-                          <Input
-                            value={joinName}
-                            onChange={(e) => setJoinName(e.target.value)}
-                            placeholder="örn. Ayşe"
-                            className="h-11"
-                            autoComplete="off"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="block text-xs font-medium text-muted-foreground">
-                            PIN
-                          </label>
-                          <Input
-                            type="password"
-                            value={joinPin}
-                            onChange={(e) => setJoinPin(e.target.value)}
-                            placeholder="4+ hane"
-                            className="h-11 w-24"
-                            inputMode="numeric"
-                            autoComplete="off"
-                          />
-                        </div>
-                        <p className="col-span-2 text-[11px] text-muted-foreground">
-                          PIN adını korur: ilk girişte belirlenir, sonraki girişlerde
-                          aynısı istenir. Böylece iki kişinin sayımı asla karışmaz.
-                        </p>
-                      </div>
+                      {joinRole === "counter" && (
+                        <>
+                          <div className="space-y-1">
+                            <label className="block text-xs font-medium text-muted-foreground">
+                              Adın
+                            </label>
+                            <Input
+                              value={joinName}
+                              onChange={(e) => setJoinName(e.target.value)}
+                              placeholder="örn. Ayşe"
+                              className="h-11"
+                              autoComplete="off"
+                              required
+                            />
+                            {knownNames.length > 0 ? (
+                              <div className="pt-1">
+                                <p className="mb-1 text-[11px] text-muted-foreground">
+                                  Daha önce giren sayımcılar — sen varsan dokun, yeni kayıt açılmaz:
+                                </p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {knownNames.map((k) => (
+                                    <button
+                                      key={k.name}
+                                      type="button"
+                                      onClick={() => {
+                                        setJoinName(k.name)
+                                        setShowPin(k.hasPin)
+                                      }}
+                                      className={`rounded-md border px-2.5 py-1 text-sm font-medium transition-colors ${
+                                        joinName.trim().toLocaleLowerCase("tr") ===
+                                        k.name.toLocaleLowerCase("tr")
+                                          ? "border-primary bg-primary text-primary-foreground"
+                                          : "bg-card hover:border-primary hover:text-primary"
+                                      }`}
+                                    >
+                                      {k.name}
+                                      {k.hasPin && " 🔒"}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-[11px] text-muted-foreground">
+                                Aynı adı yazarsan aynı sayımcı olarak devam edersin (büyük/küçük
+                                harf fark etmez).
+                              </p>
+                            )}
+                          </div>
+                          {showPin ||
+                          knownNames.some(
+                            (k) =>
+                              k.hasPin &&
+                              k.name.toLocaleLowerCase("tr") ===
+                                joinName.trim().toLocaleLowerCase("tr")
+                          ) ? (
+                            <div className="space-y-1">
+                              <label className="block text-xs font-medium text-muted-foreground">
+                                Kişisel PIN (en az 4 rakam)
+                              </label>
+                              <Input
+                                type="password"
+                                value={joinPin}
+                                onChange={(e) => setJoinPin(e.target.value)}
+                                placeholder="Bu ad PIN ile korunuyor"
+                                className="h-11"
+                                inputMode="numeric"
+                                autoComplete="off"
+                                minLength={4}
+                              />
+                              <p className="text-[11px] text-muted-foreground">
+                                İlk kez giriyorsan kendin belirle; sonra aynı ad + aynı PIN ile
+                                girersin. Başkası senin adınla giremez.
+                              </p>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setShowPin(true)}
+                              className="text-xs font-medium text-primary underline underline-offset-2"
+                            >
+                              Adımı kişisel PIN ile koru (isteğe bağlı)
+                            </button>
+                          )}
+                        </>
+                      )}
                       <Button type="submit" className="w-full h-11" disabled={busy}>
                         <LogIn className="h-4 w-4 mr-1" />
                         {busy ? "Giriliyor..." : "Giriş Yap"}

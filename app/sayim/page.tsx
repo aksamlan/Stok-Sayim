@@ -2,9 +2,9 @@
 
 import React, { Suspense, useState, useEffect, useRef, useCallback } from "react"
 import Link from "next/link"
-import { Plus, Minus, Trash2, Download, Upload, Moon, Sun, Search, Volume2, VolumeX, RotateCcw, Camera, ScanBarcode, Package, AlertTriangle, CheckCircle2, XCircle, Zap, ClipboardList, Pencil, PlusCircle, Delete, ImageUp, Share2, FileSpreadsheet, FileText, Printer, ChevronDown, Store } from "lucide-react"
+import { Plus, Minus, Trash2, Download, Upload, Moon, Sun, Search, Volume2, VolumeX, RotateCcw, Camera, ScanBarcode, Package, AlertTriangle, CheckCircle2, XCircle, Zap, ClipboardList, Pencil, PlusCircle, Delete, ImageUp, Share2, FileSpreadsheet, FileText, ChevronDown, Store } from "lucide-react"
 import { Toaster, toast } from "sonner"
-import { PoweredByStokzen } from "@/components/stokzen"
+import { PoweredByStokzen, StokzenLogo } from "@/components/stokzen"
 import { loadAuth } from "@/lib/store-client/session"
 import type { StoreAuth } from "@/lib/store-client/types"
 import { Button } from "@/components/ui/button"
@@ -48,8 +48,6 @@ import {
   downloadCountXLSX,
   downloadCompareCSV,
   downloadCompareXLSX,
-  printCountPDF,
-  printComparePDF,
   shareCount,
   shareCompare,
   type ShareOutcome,
@@ -734,14 +732,6 @@ function InventoryCounterContent() {
     }
   }
 
-  const handleExportCountPDF = () => {
-    if (!printCountPDF(items, activeSessionName)) {
-      toast.error("PDF penceresi açılamadı", {
-        description: "Tarayıcınız açılır pencereyi engellemiş olabilir.",
-      })
-    }
-  }
-
   const notifyShareOutcome = (outcome: ShareOutcome) => {
     switch (outcome) {
       case "file":
@@ -782,14 +772,6 @@ function InventoryCounterContent() {
       toast.success("CSV dosyası indirildi")
     } catch {
       toast.error("CSV dosyası oluşturulamadı")
-    }
-  }
-
-  const handleExportComparePDF = () => {
-    if (!printComparePDF(getComparisonResults(), activeSessionName)) {
-      toast.error("PDF penceresi açılamadı", {
-        description: "Tarayıcınız açılır pencereyi engellemiş olabilir.",
-      })
     }
   }
 
@@ -978,9 +960,7 @@ function InventoryCounterContent() {
         <div className="flex items-center justify-between mb-3">
           <h1 className="flex items-center gap-2 text-lg sm:text-xl font-bold tracking-tight">
             <Link href="/" title="Ana sayfa" className="flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
-                <ScanBarcode className="h-4 w-4" />
-              </span>
+              <StokzenLogo className="h-8 w-8" />
               <span>
                 Stok<span className="text-primary">zen</span>
               </span>
@@ -1469,10 +1449,6 @@ function InventoryCounterContent() {
                       <FileText className="text-blue-600" />
                       CSV (.csv)
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleExportCountPDF}>
-                      <Printer className="text-red-600" />
-                      PDF / Yazdır
-                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
                 <Button variant="outline" size="sm" className="h-9" onClick={handleShareCount} disabled={items.length === 0}>
@@ -1716,10 +1692,6 @@ function InventoryCounterContent() {
                     <DropdownMenuItem onClick={handleExportCompareCSV}>
                       <FileText className="text-blue-600" />
                       CSV (.csv)
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleExportComparePDF}>
-                      <Printer className="text-red-600" />
-                      PDF / Yazdır
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
