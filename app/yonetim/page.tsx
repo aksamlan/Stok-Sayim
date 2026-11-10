@@ -54,6 +54,7 @@ type StoreRow = {
   id: string
   code: string
   name: string
+  email: string | null
   createdAt: number
   catalogCount: number
   sessionCount: number
@@ -67,6 +68,8 @@ type Overview = {
   stores: StoreRow[]
   recent: { storeName: string; counter: string; qty: number; at: number }[]
 }
+
+type Settings = { retentionDays: number; mailConfigured: boolean }
 
 function timeAgo(ts: number): string {
   const s = Math.max(0, Math.floor((Date.now() - ts) / 1000))
@@ -109,6 +112,8 @@ export default function YonetimPage() {
   const [resetWhich, setResetWhich] = useState<"count" | "admin">("count")
   const [resetPw, setResetPw] = useState("")
   const [deleteTarget, setDeleteTarget] = useState<StoreRow | null>(null)
+  const [settings, setSettings] = useState<Settings | null>(null)
+  const [retentionInput, setRetentionInput] = useState("")
 
   useEffect(() => {
     try {
@@ -121,6 +126,9 @@ export default function YonetimPage() {
     if (!token) return
     try {
       setData(await api<Overview>("/api/yonetim/overview", { token }))
+      const s = await api<Settings>("/api/yonetim/settings", { token })
+      setSettings(s)
+      setRetentionInput((prev) => prev || String(s.retentionDays))
     } catch (err) {
       if (err instanceof Error && /giriş|geçersiz/i.test(err.message)) {
         setToken(null)
@@ -320,6 +328,9 @@ export default function YonetimPage() {
                               <p className="text-sm font-medium leading-tight">{s.name}</p>
                               <p className="font-mono text-xs text-muted-foreground leading-tight">
                                 {s.code}
+                                {s.email && (
+                                  <span className="font-sans"> · {s.email}</span>
+                                )}
                               </p>
                             </TableCell>
                             <TableCell className="py-1.5 text-right tabular-nums">
@@ -364,6 +375,54 @@ export default function YonetimPage() {
                       </TableBody>
                     </Table>
                   </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="mb-3 py-0 gap-0">
+              <CardContent className="px-3 py-2.5 flex items-center gap-3 flex-wrap">
+                <span className="text-sm font-medium">Otomatik temizlik:</span>
+                <span className="text-sm text-muted-foreground">
+                  hareketsiz mağazalar
+                </span>
+                <Input
+                  value={retentionInput}
+                  onChange={(e) => setRetentionInput(e.target.value.replace(/\D/g, ""))}
+                  className="h-8 w-20 text-center"
+                  inputMode="numeric"
+                />
+                <span className="text-sm text-muted-foreground">
+                  gün sonra silinir (0 = kapalı; silinmeden 7 gün önce e-posta uyarısı)
+                </span>
+                <Button
+                  size="sm"
+                  className="h-8"
+                  onClick={async () => {
+                    if (!token) return
+                    try {
+                      const r = await api<{ retentionDays: number }>(
+                        "/api/yonetim/settings",
+                        {
+                          method: "PATCH",
+                          token,
+                          body: { retentionDays: Number(retentionInput || "0") },
+                        }
+                      )
+                      setSettings((s) =>
+                        s ? { ...s, retentionDays: r.retentionDays } : s
+                      )
+                      toast.success("Kaydedildi")
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : "Kaydedilemedi")
+                    }
+                  }}
+                >
+                  Kaydet
+                </Button>
+                {settings && !settings.mailConfigured && (
+                  <Badge variant="outline" className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30">
+                    SMTP ayarlı değil — e-postalar gönderilmez (kurulum menüsü: SMTP)
+                  </Badge>
                 )}
               </CardContent>
             </Card>
@@ -440,8 +499,8 @@ export default function YonetimPage() {
               required
             />
             <p className="text-xs text-muted-foreground">
-              Yeni şifreyi mağaza sahibine ilet. Eski şifre anında geçersiz olur;
-              açık oturumlar etkilenmez.
+              Yeni şifreyi mağaza sahibine ilet. Eski şifre anında geçersiz olur
+              ve o mağazadaki tüm açık oturumlar kapatılır (herkes yeniden girer).
             </p>
             <Button type="submit" className="w-full h-10">
               Şifreyi Güncelle

@@ -73,4 +73,6 @@ export type SyncState = {
   // Kapatılmış/silinmiş bir sayıma ait olduğu için gönderilemeyip kuyruktan
   // düşürülen olayların kümülatif sayısı (kullanıcıya uyarı göstermek için).
   droppedTotal?: number
+  // Emanet deposunda (dead-letter) bekleyen, CSV olarak kurtarılabilir okutma sayısı.
+  deadTotal?: number
 }

@@ -40,6 +40,7 @@ export type StoreOverview = {
   id: string
   code: string
   name: string
+  email: string | null
   createdAt: number
   catalogCount: number
   sessionCount: number
@@ -55,7 +56,7 @@ export function overview(db: DatabaseSync): {
 } {
   const stores = db
     .prepare(
-      `SELECT s.id, s.code, s.name, s.created_at AS createdAt,
+      `SELECT s.id, s.code, s.name, s.email, s.created_at AS createdAt,
         (SELECT COUNT(*) FROM products p WHERE p.store_id = s.id) AS catalogCount,
         (SELECT COUNT(*) FROM sessions x WHERE x.store_id = s.id) AS sessionCount,
         (SELECT COUNT(DISTINCT counter) FROM scan_events e WHERE e.store_id = s.id) AS counterCount,
@@ -87,8 +88,11 @@ export function resetStorePassword(
     throw new ApiError(400, "Şifre en az 4 karakter olmalı")
   }
   const column = which === "admin" ? "admin_pw_hash" : "count_pw_hash"
+  // token_version artar: eski şifreyle alınmış TÜM oturumlar anında düşer.
   const result = db
-    .prepare(`UPDATE stores SET ${column} = ? WHERE id = ?`)
+    .prepare(
+      `UPDATE stores SET ${column} = ?, token_version = token_version + 1 WHERE id = ?`
+    )
     .run(hashPassword(newPassword), storeId)
   if (Number(result.changes) === 0) throw new ApiError(404, "Mağaza bulunamadı")
 }
@@ -99,6 +103,7 @@ export function deleteStore(db: DatabaseSync, storeId: string): void {
     db.prepare("DELETE FROM scan_events WHERE store_id = ?").run(storeId)
     db.prepare("DELETE FROM products WHERE store_id = ?").run(storeId)
     db.prepare("DELETE FROM sessions WHERE store_id = ?").run(storeId)
+    db.prepare("DELETE FROM counters WHERE store_id = ?").run(storeId)
     const r = db.prepare("DELETE FROM stores WHERE id = ?").run(storeId)
     if (Number(r.changes) === 0) throw new ApiError(404, "Mağaza bulunamadı")
     db.exec("COMMIT")

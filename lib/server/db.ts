@@ -14,6 +14,9 @@ CREATE TABLE IF NOT EXISTS stores (
   count_pw_hash TEXT NOT NULL,
   admin_pw_hash TEXT NOT NULL,
   catalog_version INTEGER NOT NULL DEFAULT 0,
+  token_version INTEGER NOT NULL DEFAULT 1,
+  email TEXT,
+  cleanup_warned_at INTEGER,
   created_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS sessions (
@@ -53,17 +56,29 @@ CREATE TABLE IF NOT EXISTS counters (
 );
 `
 
-// Gelecek sürümlerde şema değişiklikleri buraya eklenir (her giriş bir sürüm):
-// örn. "ALTER TABLE products ADD COLUMN price REAL" → v2.
-// Servis her açılışta eksik migrasyonları sırayla ve transaction içinde uygular.
-const MIGRATIONS: string[] = []
+// KURAL: SCHEMA her zaman EN GÜNCEL şemayı tanımlar (yeni kurulum doğrudan
+// günceli alır). Eski veritabanlarını güncele taşıyan dönüşümler ise buraya
+// sürüm sırasıyla eklenir. Yeni (bomboş) bir veritabanı migrasyonları HİÇ
+// çalıştırmadan hedef sürüme damgalanır; yalnız eski veritabanları eksik
+// migrasyonları sırayla uygular.
+const MIGRATIONS: string[] = [
+  // v2: şifre/PIN sıfırlanınca eski oturumları geçersiz kılmak için
+  "ALTER TABLE stores ADD COLUMN token_version INTEGER NOT NULL DEFAULT 1",
+  // v3: iletişim e-postası + hareketsizlik temizliği uyarı damgası
+  "ALTER TABLE stores ADD COLUMN email TEXT;\n" +
+    "ALTER TABLE stores ADD COLUMN cleanup_warned_at INTEGER",
+]
+const SCHEMA_TARGET = 1 + MIGRATIONS.length
 
-function applyMigrations(db: DatabaseSync): void {
+function applyMigrations(db: DatabaseSync, fresh: boolean): void {
+  if (fresh) {
+    setMeta(db, "schema_version", String(SCHEMA_TARGET))
+    return
+  }
   const raw = getMeta(db, "schema_version")
   let current = raw ? Number(raw) : 1
   if (!Number.isFinite(current) || current < 1) current = 1
-  const target = 1 + MIGRATIONS.length
-  for (let v = current; v < target; v++) {
+  for (let v = current; v < SCHEMA_TARGET; v++) {
     db.exec("BEGIN")
     try {
       db.exec(MIGRATIONS[v - 1])
@@ -74,7 +89,7 @@ function applyMigrations(db: DatabaseSync): void {
       throw e
     }
   }
-  if (!raw) setMeta(db, "schema_version", String(target))
+  if (!raw) setMeta(db, "schema_version", String(SCHEMA_TARGET))
 }
 
 export function openDatabase(dbPath: string): DatabaseSync {
@@ -86,13 +101,18 @@ export function openDatabase(dbPath: string): DatabaseSync {
     db.exec("PRAGMA journal_mode=WAL")
   }
   db.exec("PRAGMA foreign_keys=ON")
+  // Tazelik tespiti SCHEMA'dan ÖNCE yapılmalı: meta tablosu hiç yoksa bu
+  // yepyeni bir veritabanıdır ve SCHEMA zaten güncel halini kurar.
+  const fresh = !db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='meta'")
+    .get()
   db.exec(SCHEMA)
   // SQLite'ın NOCASE'i ASCII-dışını (İ/ı/Ş...) tanımaz; Türkçe arama için
   // JS'in tr-locale küçük harfe çevirmesini SQL'e fonksiyon olarak veriyoruz.
   db.function("tr_lower", { deterministic: true }, (value: unknown) =>
     value == null ? null : String(value).toLocaleLowerCase("tr")
   )
-  applyMigrations(db)
+  applyMigrations(db, fresh)
   return db
 }
 

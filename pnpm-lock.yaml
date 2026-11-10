@@ -125,6 +125,9 @@ dependencies:
   next-themes:
     specifier: ^0.4.6
     version: 0.4.6(react-dom@19.2.0)(react@19.2.0)
+  nodemailer:
+    specifier: ^10.5.0
+    version: 10.5.0
   react:
     specifier: 19.2.0
     version: 19.2.0
@@ -169,6 +172,9 @@ devDependencies:
   '@types/node':
     specifier: ^22
     version: 22.20.5
+  '@types/nodemailer':
+    specifier: ^8.0.2
+    version: 8.0.2
   '@types/react':
     specifier: ^19
     version: 19.3.0
@@ -2192,6 +2198,12 @@ packages:
       undici-types: 6.21.0
     dev: true
 
+  /@types/nodemailer@8.0.2:
+    resolution: {integrity: sha512-c7M5ox8p0nEOfbJ2E9Qcmt8/QCu/VzsiAhzBiZbvky2PhKZDHpKB3sQHBM5MEZNkCfBOaS6S9//AGPRTNB7IaA==}
+    dependencies:
+      '@types/node': 22.20.5
+    dev: true
+
   /@types/react-dom@19.3.0(@types/react@19.3.0):
     resolution: {integrity: sha512-ZI7bU42mZXXKHn/qNLEw2IrbiINU7X5+vfgdixBHkCNpYWXjKgfQ/P+uyGb5CjOLB9UcnTeg3rylQtV2hym44Q==}
     peerDependencies:
@@ -2910,6 +2922,11 @@ packages:
   /node-releases@2.0.62:
     resolution: {integrity: sha512-A0Eq+qVDQI97IbAD6g/HriIuv256el9N8EwF4+xqJ49pwrdRYpdCSmLk0sO4I3fnS6hpYE5v22B73Bk+WArEoQ==}
     engines: {node: '>=18'}
+    dev: false
+
+  /nodemailer@10.5.0:
+    resolution: {integrity: sha512-L/w/HH5MqpzMDuZD7fQdt/+KqymuvrpaApaIjAH2XA3ILePwlcvXCVVvP75xVrXCEt2ggK2marrrHHFB5Qu0kA==}
+    engines: {node: '>=20.0.0'}
     dev: false
 
   /object-assign@4.1.1:

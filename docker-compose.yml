@@ -2,7 +2,9 @@ services:
   stok:
     build: .
     ports:
-      - "3000:3000"
+      # Varsayılan: yalnız bu sunucudan erişim (önüne Caddy/Nginx koy).
+      # Alan adsız, doğrudan IP:3000 ile kullanacaksan "3000:3000" yap.
+      - "127.0.0.1:3000:3000"
     volumes:
       - ./data:/app/data
     restart: unless-stopped

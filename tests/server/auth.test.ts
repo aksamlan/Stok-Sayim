@@ -9,6 +9,7 @@ import {
   type TokenPayload,
 } from "../../lib/server/auth"
 import { openDatabase } from "../../lib/server/db"
+import { createStore, joinStore } from "../../lib/server/stores"
 
 const in30d = () => Date.now() + 30 * 24 * 3600 * 1000
 
@@ -60,22 +61,39 @@ test("expired token rejected", () => {
 
 test("requireAuth enforces admin role", () => {
   const db = openDatabase(":memory:")
-  const token = signToken(db, {
-    storeId: "s1",
-    role: "counter",
-    counter: "Ali",
-    exp: in30d(),
-  })
+  const { storeId, code } = createStore(db, "Şube", "say123", "admin123")
+  const { token } = joinStore(db, code, "say123", "Ali", "1111")
   const req = new Request("http://x/api", {
     headers: { Authorization: `Bearer ${token}` },
   })
-  expect(requireAuth(db, req).storeId).toBe("s1")
+  expect(requireAuth(db, req).storeId).toBe(storeId)
   try {
     requireAuth(db, req, "admin")
     expect.unreachable("should have thrown")
   } catch (e) {
     expect(e).toBeInstanceOf(ApiError)
     expect((e as ApiError).status).toBe(403)
+  }
+})
+
+test("token for a nonexistent store is rejected", () => {
+  const db = openDatabase(":memory:")
+  const token = signToken(db, {
+    storeId: "hayalet",
+    role: "counter",
+    counter: "Ali",
+    exp: in30d(),
+    tv: 1,
+    cg: 1,
+  })
+  const req = new Request("http://x/api", {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  try {
+    requireAuth(db, req)
+    expect.unreachable()
+  } catch (e) {
+    expect((e as ApiError).status).toBe(401)
   }
 })
 

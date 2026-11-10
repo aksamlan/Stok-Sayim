@@ -1,4 +1,6 @@
 import { ApiError } from "./auth"
+import { maybeCleanup } from "./cleanup"
+import { getDb } from "./db"
 
 export function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -12,6 +14,11 @@ export function handle(
 ): (req: Request) => Promise<Response> {
   return async (req: Request) => {
     try {
+      // Hareketsiz mağaza temizliği: ucuz eşik kontrolü, 6 saatte bir çalışır,
+      // isteği bekletmez.
+      try {
+        maybeCleanup(getDb())
+      } catch {}
       return await fn(req)
     } catch (e) {
       if (e instanceof ApiError) return json({ error: e.message }, e.status)

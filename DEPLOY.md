@@ -51,13 +51,14 @@ sudo bash scripts/kurulum.sh
 Karşına menü çıkar:
 
 ```
-  1) Kurulum        (Node + build + servis; alan adı ve şifre sorulur)
+  1) Kurulum        (Node + build + servis; alan adı, şifre, SMTP sorulur)
   2) Güncelle       (git pull + build + migrasyon + servis restart)
-  3) Alan adı bağla / değiştir (Caddy, otomatik HTTPS)
-  4) /yonetim şifresi belirle / sıfırla
-  5) Durum ve loglar
-  6) Servisi yeniden başlat
-  7) Yedek al (data/ klasörü)
+  3) Alan adı bağla / değiştir (Caddy, otomatik HTTPS, 127.0.0.1 bağlama)
+  4) E-posta (SMTP) ayarla
+  5) /yonetim şifresi belirle / sıfırla
+  6) Durum ve loglar
+  7) Servisi yeniden başlat
+  8) Yedek al (güvenli çevrimiçi kopya)
   0) Çıkış
 ```
 
@@ -71,10 +72,22 @@ uygulama otomatik açılır), sonra sana sırayla sorar:
   `/yonetim` paneline girersin: tüm mağazaları, kim ne saymış görürsün;
   şifresini unutan mağazaya yeni şifre verirsin.
 
-Şifreyi sonradan değiştirmek/sıfırlamak için yine menüden **4**'ü seçmen
-yeterli (sadece sunucudan değiştirilebilir — güvenlik böyle sağlanıyor).
+- **E-posta (SMTP)** — isteğe bağlı: ayarlarsan mağaza kuranlara hoş geldin
+  maili gider ve uzun süre kullanılmayan mağazalar silinmeden önce e-posta ile
+  uyarılır. SMTP bilgilerini mail sağlayıcından alırsın; sonradan menüden
+  **4** ile de ayarlayabilirsin.
 
-## 5. Alan adını Cloudflare'e bağla
+Şifreyi sonradan değiştirmek/sıfırlamak için menüden **5**'i seçmen yeterli
+(sadece sunucudan değiştirilebilir — güvenlik böyle sağlanıyor).
+
+### Otomatik temizlik
+
+Varsayılan olarak **30 gün** hiç kullanılmayan mağazalar, tüm verileriyle
+birlikte otomatik silinir (7 gün önce e-posta uyarısı gider, SMTP ayarlıysa).
+Süreyi `/yonetim` panelindeki "Otomatik temizlik" alanından değiştirebilir
+ya da 0 yapıp kapatabilirsin.
+
+## 4. Alan adını Cloudflare'e bağla
 
 1. Cloudflare → alan adın → **DNS** → **Add record**:
    - Type: `A`, Name: `stok` (veya istediğin alt alan), IPv4: `SUNUCU-IP`
@@ -99,7 +112,7 @@ sudo ufw allow 80,443/tcp
 sudo ufw enable
 ```
 
-## 6. Güncelleme (yeni sürüm çıktığında)
+## 5. Güncelleme (yeni sürüm çıktığında)
 
 Menüden **2**'yi seç — ya da kısayol:
 
@@ -112,22 +125,24 @@ Kod çekilir, derlenir, varsa veritabanı migrasyonları servis açılışında
 otomatik uygulanır, servis yeniden başlar. **Veriler silinmez** — her şey
 `data/` klasöründedir.
 
-## 7. Yedekleme
+## 6. Yedekleme
 
-Menüden **7** anında yedek alır (`~/stok-yedek-TARIH.tar.gz`). Tüm veri tek
-klasörde: `~/stok-sayim/data/` — yedek = bu klasörü kopyalamak.
+Menüden **8** anında güvenli yedek alır (`~/stok-yedek-TARIH.tar.gz`).
+Çalışan veritabanı dosyasını elle kopyalamak bozuk yedek üretebilir; menü,
+SQLite'ın çevrimiçi yedeğini (VACUUM INTO) kullanır — servis çalışırken bile
+tutarlıdır.
 
 Günlük otomatik yedek için:
 
 ```bash
 crontab -e
-# şu satırı ekle (her gece 03:00'te yedekler, son 14 günü tutar):
-0 3 * * * tar czf $HOME/yedek-stok-$(date +\%F).tar.gz -C $HOME/stok-sayim data && ls -t $HOME/yedek-stok-*.tar.gz | tail -n +15 | xargs -r rm
+# şu satırı ekle (her gece 03:00'te güvenli yedek alır, son 14 günü tutar):
+0 3 * * * bash $HOME/stok-sayim/scripts/kurulum.sh yedek >/dev/null 2>&1 && ls -t $HOME/stok-yedek-*.tar.gz | tail -n +15 | xargs -r rm
 ```
 
-## 8. Servis durumu ve loglar
+## 7. Servis durumu ve loglar
 
-Menüden **5** durumu ve son logları gösterir, **6** servisi yeniden başlatır.
+Menüden **6** durumu ve son logları gösterir, **7** servisi yeniden başlatır.
 Elle bakmak istersen:
 
 ```bash

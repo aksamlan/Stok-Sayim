@@ -4,7 +4,9 @@ import { rateLimitOrThrow } from "@/lib/server/ratelimit"
 import { joinStore } from "@/lib/server/stores"
 
 export const POST = handle(async (req) => {
-  rateLimitOrThrow(req, "join", 10, 60000)
+  // Cloudflare arkasında tüm mağaza personeli aynı edge IP'den görünebilir;
+  // 10 kişilik ekip aynı dakikada girerken 11.'yi engellememek için 30/dk.
+  rateLimitOrThrow(req, "join", 30, 60000)
   const body = await readBody<{
     code: string
     password: string

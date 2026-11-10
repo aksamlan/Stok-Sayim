@@ -136,6 +136,17 @@ test("closed session rejects events", () => {
   }
 })
 
+test("more than 1000 events per request rejected", () => {
+  const { db, storeId, sessionId } = setup()
+  const batch = Array.from({ length: 1001 }, () => ev(sessionId, "869001", 1))
+  try {
+    recordEvents(db, storeId, "Ali", batch)
+    expect.unreachable()
+  } catch (e) {
+    expect((e as ApiError).status).toBe(400)
+  }
+})
+
 test("invalid createdAt rejected with 400", () => {
   const { db, storeId, sessionId } = setup()
   try {

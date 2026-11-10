@@ -45,9 +45,14 @@ const escHtml = (s: string) =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
 
-// Noktalı virgül/çift tırnak içeren değerleri güvenli yaz
+// Noktalı virgül/çift tırnak içeren değerleri güvenli yaz. Ayrıca =,+,@ ile
+// başlayan metinleri ' ile etkisizleştir: Excel bunları formül olarak çalıştırır
+// (CSV formül enjeksiyonu). Gerçek sayılar (örn. -3 farkı) olduğu gibi kalır.
 const csvCell = (v: string | number) => {
-  const s = String(v)
+  let s = String(v)
+  if (/^[=+@\t\r-]/.test(s) && !/^-?\d+([.,]\d+)?$/.test(s)) {
+    s = "'" + s
+  }
   return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 

@@ -4,13 +4,19 @@
 // DB dosyası: $DATA_DIR/stok.db (varsayılan ./data/stok.db)
 
 import { randomBytes, scryptSync } from "node:crypto"
-import { mkdirSync } from "node:fs"
+import { mkdirSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { DatabaseSync } from "node:sqlite"
 
-const password = process.argv[2]
+let password = process.argv[2]
+// "-" verilirse şifre stdin'den okunur: komut satırında/süreç listesinde
+// görünmez, özel karakterler bozulmaz. (kurulum.sh menüsü bunu kullanır)
+if (password === "-") {
+  password = readFileSync(0, "utf8").replace(/\r?\n$/, "")
+}
 if (!password || password.length < 6) {
   console.error("Kullanım: node scripts/yonetici-sifre.mjs <yeni-şifre>")
+  console.error('         printf "%s" "<şifre>" | node scripts/yonetici-sifre.mjs -')
   console.error("Şifre en az 6 karakter olmalı.")
   process.exit(1)
 }

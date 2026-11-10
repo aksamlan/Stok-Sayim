@@ -8,5 +8,8 @@ export const GET = handle((req) => {
   const auth = requireAuth(db, req)
   const sessionId = new URL(req.url).searchParams.get("sessionId")
   if (!sessionId) throw new ApiError(400, "sessionId gerekli")
-  return json({ items: myCounts(db, auth.storeId, sessionId, auth.counter) })
+  // /api/scan yönetici okutmalarını "Yönetici" adıyla yazar; burada da aynı
+  // ad kullanılmalı ki yöneticinin kendi listesi yeni cihazda geri gelsin.
+  const counter = auth.role === "admin" ? "Yönetici" : auth.counter
+  return json({ items: myCounts(db, auth.storeId, sessionId, counter) })
 })

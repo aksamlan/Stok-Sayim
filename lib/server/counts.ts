@@ -1,6 +1,5 @@
 import type { DatabaseSync } from "node:sqlite"
 import { ApiError } from "./auth"
-import { catalogSize } from "./catalog"
 
 export type ScanEvent = {
   id: string
@@ -53,6 +52,9 @@ export function recordEvents(
   events: ScanEvent[]
 ): { accepted: number } {
   if (!Array.isArray(events) || events.length === 0) return { accepted: 0 }
+  if (events.length > 1000) {
+    throw new ApiError(400, "Tek istekte en fazla 1000 okutma gönderilebilir")
+  }
   const sessionId = events[0].sessionId
   for (const e of events) {
     if (

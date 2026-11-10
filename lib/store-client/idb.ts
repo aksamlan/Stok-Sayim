@@ -1,4 +1,4 @@
-const DB_VERSION = 1
+const DB_VERSION = 2
 
 export function openIdb(storeId: string): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -16,6 +16,11 @@ export function openIdb(storeId: string): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains("meta")) {
         db.createObjectStore("meta", { keyPath: "key" })
+      }
+      // v2: kapatılmış sayıma gönderilemeyen okutmaların emanet deposu —
+      // hiçbir okutma sessizce yok olmaz, CSV olarak kurtarılabilir.
+      if (!db.objectStoreNames.contains("dead")) {
+        db.createObjectStore("dead", { keyPath: "id" })
       }
     }
     req.onsuccess = () => resolve(req.result)

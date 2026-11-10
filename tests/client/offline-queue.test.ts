@@ -11,10 +11,11 @@ const ev = (id: string, sessionId: string): QueuedEvent => ({
   createdAt: 1,
 })
 
-test("closed-session group (409) is dropped, other groups still post", async () => {
+test("closed-session group (409) is stashed then dropped, other groups still post", async () => {
   const events = [ev("a1", "kapali"), ev("a2", "kapali"), ev("b1", "aktif")]
   const posted: string[][] = []
   const removed: string[][] = []
+  const stashed: string[][] = []
   const result = await processQueue(
     events,
     async (batch) => {
@@ -25,10 +26,14 @@ test("closed-session group (409) is dropped, other groups still post", async () 
     },
     async (ids) => {
       removed.push(ids)
+    },
+    async (evts) => {
+      stashed.push(evts.map((e) => e.id))
     }
   )
   expect(posted).toEqual([["b1"]])
-  // kapalı grubun olayları kuyruktan temizlendi (düşürüldü), aktif grubunki gönderim sonrası silindi
+  // düşen grup önce emanete (stash) yazıldı, sonra kuyruktan temizlendi
+  expect(stashed.flat().sort()).toEqual(["a1", "a2"])
   expect(removed.flat().sort()).toEqual(["a1", "a2", "b1"])
   expect(result.dropped).toBe(2)
   expect(result.posted).toBe(1)

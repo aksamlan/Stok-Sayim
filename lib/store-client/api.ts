@@ -68,6 +68,7 @@ export function apiCreateStore(body: {
   name: string
   countPassword: string
   adminPassword: string
+  email?: string
 }): Promise<JoinResult & { code: string }> {
   return request("/api/store", { method: "POST", body })
 }
@@ -79,6 +80,12 @@ export function apiJoinStore(body: {
   pin?: string
 }): Promise<JoinResult> {
   return request("/api/store/join", { method: "POST", body })
+}
+
+export function apiCounters(
+  token: string
+): Promise<{ counters: { name: string; createdAt: number }[] }> {
+  return request("/api/counters", { token })
 }
 
 export function apiResetCounterPin(token: string, name: string): Promise<{ ok: true }> {

@@ -1,7 +1,14 @@
 import { ApiError, requireAuth } from "@/lib/server/auth"
 import { getDb } from "@/lib/server/db"
 import { handle, json } from "@/lib/server/http"
-import { resetCounterPin } from "@/lib/server/stores"
+import { listCounters, resetCounterPin } from "@/lib/server/stores"
+
+// Kayıtlı tüm sayımcılar (hiç okutmamışlar dahil) — PIN yönetimi için.
+export const GET = handle((req) => {
+  const db = getDb()
+  const auth = requireAuth(db, req, "admin")
+  return json({ counters: listCounters(db, auth.storeId) })
+})
 
 // Yönetici, PIN'ini unutan sayımcının PIN kaydını siler; sayımcı aynı isimle
 // yeni bir PIN belirleyerek tekrar girer. Sayım verisi silinmez.

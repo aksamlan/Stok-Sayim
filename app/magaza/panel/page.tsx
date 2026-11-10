@@ -73,6 +73,7 @@ import {
   AuthExpiredError,
   apiCatalogCount,
   apiCloseSession,
+  apiCounters,
   apiCreateSession,
   apiDashboard,
   apiDashboardExport,
@@ -129,6 +130,7 @@ export default function PanelPage() {
   const [closeConfirm, setCloseConfirm] = useState(false)
   const [exportBusy, setExportBusy] = useState(false)
   const [catalogCount, setCatalogCount] = useState(0)
+  const [registered, setRegistered] = useState<{ name: string; createdAt: number }[]>([])
   const searchRef = useRef(search)
   searchRef.current = search
 
@@ -189,6 +191,20 @@ export default function PanelPage() {
   useEffect(() => {
     void refreshCatalogCount()
   }, [refreshCatalogCount])
+
+  const refreshCounters = useCallback(async () => {
+    if (!auth) return
+    try {
+      const { counters } = await apiCounters(auth.token)
+      setRegistered(counters)
+    } catch (err) {
+      handleAuthError(err)
+    }
+  }, [auth, handleAuthError])
+
+  useEffect(() => {
+    void refreshCounters()
+  }, [refreshCounters])
 
   useEffect(() => {
     if (dash) setCatalogCount(dash.totals.catalogCount)
@@ -316,11 +332,22 @@ export default function PanelPage() {
 
   if (!auth) return null
 
+  // Okutma yapmışlar + sadece kayıt olmuşlar tek listede (PIN yönetimi için)
+  const counterRows = [
+    ...(dash?.byCounter ?? []).map((c) => ({ ...c, lastAt: c.lastAt as number | null })),
+    ...registered
+      .filter((r) => !(dash?.byCounter ?? []).some((c) => c.counter === r.name))
+      .map((r) => ({ counter: r.name, qty: 0, distinct: 0, lastAt: null as number | null })),
+  ]
+
   const categories = (dash?.byCategory ?? [])
     .map((c) => c.category)
     .filter((c): c is string => c !== null)
   const hasCategories = categories.length > 0
   const pageCount = dash ? Math.max(1, Math.ceil(dash.rowTotal / 100)) : 1
+  const staleCounters = (dash?.byCounter ?? [])
+    .filter((c) => Date.now() - c.lastAt > 10 * 60 * 1000)
+    .map((c) => c.counter)
 
   return (
     <div className="min-h-screen bg-background">
@@ -539,9 +566,9 @@ export default function PanelPage() {
                   <Users className="h-4 w-4 text-primary" />
                   <span className="text-sm font-medium">Sayımcılar</span>
                 </div>
-                {dash.byCounter.length === 0 ? (
+                {counterRows.length === 0 ? (
                   <p className="px-3 py-4 text-sm text-muted-foreground">
-                    Henüz kimse okutmadı.
+                    Henüz kimse katılmadı.
                   </p>
                 ) : (
                   <Table>
@@ -555,7 +582,7 @@ export default function PanelPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {dash.byCounter.map((c) => (
+                      {counterRows.map((c) => (
                         <TableRow key={c.counter}>
                           <TableCell className="py-1.5 font-medium">{c.counter}</TableCell>
                           <TableCell className="py-1.5 text-right font-bold tabular-nums">
@@ -563,7 +590,7 @@ export default function PanelPage() {
                           </TableCell>
                           <TableCell className="py-1.5 text-right tabular-nums">{c.distinct}</TableCell>
                           <TableCell className="py-1.5 text-right text-xs text-muted-foreground">
-                            {timeAgo(c.lastAt)}
+                            {c.lastAt ? timeAgo(c.lastAt) : "henüz okutmadı"}
                           </TableCell>
                           <TableCell className="py-1.5">
                             <Button
@@ -576,8 +603,9 @@ export default function PanelPage() {
                                 try {
                                   await apiResetCounterPin(auth.token, c.counter)
                                   toast.success(
-                                    `${c.counter} için PIN sıfırlandı — yeni PIN'le tekrar girebilir`
+                                    `${c.counter} için PIN sıfırlandı — eski oturumu kapandı, yeni PIN'le tekrar girer`
                                   )
+                                  void refreshCounters()
                                 } catch (err) {
                                   if (!handleAuthError(err))
                                     toast.error(
@@ -836,8 +864,16 @@ export default function PanelPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Sayımı bitir?</AlertDialogTitle>
             <AlertDialogDescription>
-              Sayımcılar artık okutamaz. Veriler silinmez; dışa aktarmayı
-              unutma.
+              Sayımcılar artık okutamaz. Sunucuya ulaşmış veriler silinmez ve
+              panodan dışa aktarılabilir.
+              {staleCounters.length > 0 && (
+                <span className="block mt-2 font-medium text-amber-700 dark:text-amber-400">
+                  Dikkat: {staleCounters.join(", ")} son 10 dakikadır veri
+                  göndermedi — çevrimdışı sayıyor olabilirler. Kapatırsan
+                  gönderemedikleri okutmalar sayıma işlenmez (cihazlarında CSV
+                  olarak kurtarılabilir).
+                </span>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

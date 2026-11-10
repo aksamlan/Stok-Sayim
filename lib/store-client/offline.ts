@@ -34,7 +34,11 @@ export async function ensureCatalog(
   onProgress?: (msg: string) => void
 ): Promise<Map<string, CatalogEntry>> {
   const db = await openIdb(auth.storeId)
-  const versionRow = await idbGet<{ key: string; value: number }>(db, "meta", "catalogVersion")
+  // Sürüm anahtarı role bağlı: yönetici önbelleği beklenen stokları içerir,
+  // sayımcı önbelleği içermez. Aynı cihazda rol değişince yeniden indirilir;
+  // böylece sayımcı, yöneticinin indirdiği stok rakamlarını devralamaz.
+  const versionKey = `catalogVersion:${auth.role}`
+  const versionRow = await idbGet<{ key: string; value: number }>(db, "meta", versionKey)
   const cachedVersion = versionRow?.value
   let items: CatalogItem[] | null = null
   try {
@@ -44,7 +48,7 @@ export async function ensureCatalog(
       onProgress?.(`Katalog indiriliyor (${res.items.length} ürün)...`)
       await idbClear(db, "catalog")
       await idbBulkPut(db, "catalog", res.items)
-      await idbPut(db, "meta", { key: "catalogVersion", value: res.version })
+      await idbPut(db, "meta", { key: versionKey, value: res.version })
       items = res.items
     }
   } catch (e) {
@@ -156,6 +160,19 @@ export async function pendingCount(storeId: string): Promise<number> {
   return rows.length
 }
 
+export type DeadEvent = QueuedEvent & { stashedAt: number }
+
+export async function getDeadEvents(storeId: string): Promise<DeadEvent[]> {
+  const db = await openIdb(storeId)
+  const rows = await idbGetAll<DeadEvent>(db, "dead")
+  return rows.sort((a, b) => a.createdAt - b.createdAt)
+}
+
+export async function clearDeadEvents(storeId: string): Promise<void> {
+  const db = await openIdb(storeId)
+  await idbClear(db, "dead")
+}
+
 export type DrainResult = {
   posted: number
   dropped: number
@@ -164,12 +181,14 @@ export type DrainResult = {
 
 // Kuyruğu oturum oturum gönderir. Bir oturumun hatası diğerlerini ASLA
 // engellemez; kapatılmış/silinmiş oturuma (409/404) ait olaylar kuyruktan
-// düşürülür ki kuyruk sonsuza dek tıkanmasın. Ağ hatasında olaylar kuyrukta
-// kalır ve sonraki turda yeniden denenir.
+// çıkarılır ki kuyruk sonsuza dek tıkanmasın — ama önce `stash` ile emanet
+// deposuna aktarılır: hiçbir okutma sessizce kaybolmaz. Ağ hatasında olaylar
+// kuyrukta kalır ve sonraki turda yeniden denenir.
 export async function processQueue(
   events: QueuedEvent[],
   post: (batch: QueuedEvent[]) => Promise<void>,
-  remove: (ids: string[]) => Promise<void>
+  remove: (ids: string[]) => Promise<void>,
+  stash?: (events: QueuedEvent[]) => Promise<void>
 ): Promise<DrainResult> {
   const bySession = new Map<string, QueuedEvent[]>()
   for (const e of events) {
@@ -192,6 +211,7 @@ export async function processQueue(
         break
       }
       if (e instanceof ApiHttpError && (e.status === 409 || e.status === 404)) {
+        await stash?.(group)
         await remove(group.map((x) => x.id))
         result.dropped += group.length
         continue
@@ -214,12 +234,16 @@ export function startSync(
 
   const emit = async () => {
     const pending = await pendingCount(auth.storeId).catch(() => 0)
+    const deadTotal = await getDeadEvents(auth.storeId)
+      .then((d) => d.length)
+      .catch(() => 0)
     cb({
       pending,
       lastOkAt,
       online: typeof navigator === "undefined" ? true : navigator.onLine,
       authExpired,
       droppedTotal,
+      deadTotal,
     })
   }
 
@@ -229,10 +253,17 @@ export function startSync(
     try {
       const db = await openIdb(auth.storeId)
       const all = await idbGetAll<QueuedEvent>(db, "queue")
+      const now = Date.now()
       const result = await processQueue(
         all,
         (batch) => apiPostScan(auth.token, batch).then(() => {}),
-        (ids) => idbDelete(db, "queue", ids)
+        (ids) => idbDelete(db, "queue", ids),
+        (events) =>
+          idbBulkPut(
+            db,
+            "dead",
+            events.map((e) => ({ ...e, stashedAt: now }))
+          )
       )
       if (result.authExpired) authExpired = true
       droppedTotal += result.dropped

@@ -21,15 +21,20 @@ export function createStore(
   db: DatabaseSync,
   name: string,
   countPassword: string,
-  adminPassword: string
+  adminPassword: string,
+  email?: string
 ): { storeId: string; code: string } {
   if (!name.trim()) throw new ApiError(400, "Mağaza adı gerekli")
   if (countPassword.length < 4 || adminPassword.length < 4) {
     throw new ApiError(400, "Şifreler en az 4 karakter olmalı")
   }
+  const cleanEmail = email?.trim() || null
+  if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+    throw new ApiError(400, "Geçerli bir e-posta adresi gir")
+  }
   const storeId = randomUUID()
   const insert = db.prepare(
-    "INSERT INTO stores (id, code, name, count_pw_hash, admin_pw_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+    "INSERT INTO stores (id, code, name, count_pw_hash, admin_pw_hash, email, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
   )
   for (let attempt = 0; attempt < 10; attempt++) {
     const code = randomCode()
@@ -40,11 +45,15 @@ export function createStore(
         name.trim(),
         hashPassword(countPassword),
         hashPassword(adminPassword),
+        cleanEmail,
         Date.now()
       )
       return { storeId, code }
     } catch (e) {
-      if (attempt === 9) throw e
+      // Yalnız kod çakışmasında yeni kod dene; başka hatayı (disk dolu vb.)
+      // 10 kez tekrarlamak gerçek nedeni gizler.
+      const isCollision = e instanceof Error && /UNIQUE/i.test(e.message)
+      if (!isCollision || attempt === 9) throw e
     }
   }
   throw new ApiError(500, "Mağaza kodu üretilemedi")
@@ -56,6 +65,7 @@ type StoreRow = {
   name: string
   count_pw_hash: string
   admin_pw_hash: string
+  token_version: number
 }
 
 export function joinStore(
@@ -71,7 +81,13 @@ export function joinStore(
   if (!row) throw new ApiError(401, "Kod veya şifre hatalı")
   const exp = Date.now() + TOKEN_TTL_MS
   if (verifyPassword(password, row.admin_pw_hash)) {
-    const token = signToken(db, { storeId: row.id, role: "admin", counter: "", exp })
+    const token = signToken(db, {
+      storeId: row.id,
+      role: "admin",
+      counter: "",
+      exp,
+      tv: row.token_version,
+    })
     return { token, role: "admin", storeId: row.id, storeName: row.name }
   }
   if (verifyPassword(password, row.count_pw_hash)) {
@@ -83,8 +99,9 @@ export function joinStore(
     // PIN ismi korur: ilk giren PIN'ini kaydeder, aynı ismi yanlış PIN'le
     // giren başka biri reddedilir — iki kişinin sayımı asla birbirine karışmaz.
     const existing = db
-      .prepare("SELECT pin_hash FROM counters WHERE store_id = ? AND name = ?")
-      .get(row.id, counter) as { pin_hash: string } | undefined
+      .prepare("SELECT pin_hash, created_at FROM counters WHERE store_id = ? AND name = ?")
+      .get(row.id, counter) as { pin_hash: string; created_at: number } | undefined
+    let generation: number
     if (existing) {
       if (!verifyPassword(pin.trim(), existing.pin_hash)) {
         throw new ApiError(
@@ -92,20 +109,44 @@ export function joinStore(
           "Bu isim kayıtlı ama PIN yanlış. PIN'ini doğru gir ya da farklı bir isim seç."
         )
       }
+      generation = existing.created_at
     } else {
+      generation = Date.now()
       db.prepare(
         "INSERT INTO counters (store_id, name, pin_hash, created_at) VALUES (?, ?, ?, ?)"
-      ).run(row.id, counter, hashPassword(pin.trim()), Date.now())
+      ).run(row.id, counter, hashPassword(pin.trim()), generation)
     }
-    const token = signToken(db, { storeId: row.id, role: "counter", counter, exp })
+    const token = signToken(db, {
+      storeId: row.id,
+      role: "counter",
+      counter,
+      exp,
+      tv: row.token_version,
+      cg: generation,
+    })
     return { token, role: "counter", storeId: row.id, storeName: row.name }
   }
   throw new ApiError(401, "Kod veya şifre hatalı")
 }
 
-// Yönetici, PIN'ini unutan sayımcının kaydını siler; isim yeni PIN'le yeniden alınır.
+// Yönetici, PIN'ini unutan sayımcının kaydını siler; isim yeni PIN'le yeniden
+// alınır. Eski cihazdaki token da düşer (cg eşleşmez) — isim çalınamaz.
 export function resetCounterPin(db: DatabaseSync, storeId: string, name: string): void {
   db.prepare("DELETE FROM counters WHERE store_id = ? AND name = ?").run(storeId, name)
+}
+
+// Kayıtlı sayımcı adları (hiç okutma yapmamışlar dahil) — PIN yönetimi için.
+export function listCounters(
+  db: DatabaseSync,
+  storeId: string
+): { name: string; createdAt: number }[] {
+  return (
+    db
+      .prepare(
+        "SELECT name, created_at AS createdAt FROM counters WHERE store_id = ? ORDER BY name"
+      )
+      .all(storeId) as { name: string; createdAt: number }[]
+  )
 }
 
 export type SessionInfo = {

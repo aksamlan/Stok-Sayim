@@ -41,9 +41,12 @@ import {
 import { Input } from "@/components/ui/input"
 import { decodeBarcodeFromImage } from "@/lib/barcode-image"
 import { apiMyCounts, apiSessions } from "@/lib/store-client/api"
+import { AuthExpiredError } from "@/lib/store-client/api"
 import {
+  clearDeadEvents,
   ensureCatalog,
   enqueueScan,
+  getDeadEvents,
   getMine,
   lastKnownSession,
   pruneMineExcept,
@@ -117,12 +120,22 @@ export default function SayimPage() {
         if (cancelled) return
         catalogRef.current = map
         setCatalogReady(true)
-      } catch {
-        if (!cancelled) {
+      } catch (err) {
+        if (cancelled) return
+        // Yalnız oturum hatasında çıkış yap; depolama/ağ hatasında kullanıcıyı
+        // sebepsiz yere düşürme — boş katalogla devam et ve bilgilendir.
+        if (err instanceof AuthExpiredError) {
           clearAuth()
           router.replace("/magaza")
           return
         }
+        catalogRef.current = new Map()
+        setCatalogReady(true)
+        toast.error("Katalog yüklenemedi", {
+          description:
+            "Ürün adları gösterilemeyebilir. Bağlantını kontrol edip sayfayı yenile.",
+          duration: 8000,
+        })
       }
 
       // Aktif oturumu bul (çevrimdışıysa son bilineni kullan)
@@ -405,6 +418,59 @@ export default function SayimPage() {
             </Button>
           </div>
         </div>
+
+        {/* Gönderilemeyen okutmaların kurtarma bandı */}
+        {(sync.deadTotal ?? 0) > 0 && (
+          <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2">
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+              {sync.deadTotal} okutma kapatılmış bir sayıma aitti, gönderilemedi
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Kayıtlar cihazında güvende. CSV indirip yöneticine iletebilirsin.
+            </p>
+            <div className="flex gap-2 mt-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8"
+                onClick={async () => {
+                  if (!auth) return
+                  const dead = await getDeadEvents(auth.storeId)
+                  const csv =
+                    "﻿Barkod;Adet;Zaman\r\n" +
+                    dead
+                      .map(
+                        (d) =>
+                          `${d.barcode};${d.qty};${new Date(d.createdAt).toLocaleString("tr-TR")}`
+                      )
+                      .join("\r\n")
+                  const url = URL.createObjectURL(
+                    new Blob([csv], { type: "text/csv;charset=utf-8;" })
+                  )
+                  const link = document.createElement("a")
+                  link.href = url
+                  link.download = `kurtarilan_okutmalar_${auth.counter || "yonetici"}.csv`
+                  link.click()
+                  URL.revokeObjectURL(url)
+                }}
+              >
+                CSV İndir
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 text-muted-foreground"
+                onClick={async () => {
+                  if (!auth) return
+                  await clearDeadEvents(auth.storeId)
+                  setSync((s) => ({ ...s, deadTotal: 0 }))
+                }}
+              >
+                Temizle
+              </Button>
+            </div>
+          </div>
+        )}
 
         {!catalogReady || (!session && !noSession) ? (
           <Card>

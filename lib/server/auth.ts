@@ -20,6 +20,11 @@ export type TokenPayload = {
   role: "counter" | "admin" | "super"
   counter: string
   exp: number
+  // Mağazanın token sürümü: şifre sıfırlanınca artar, eski tokenlar düşer.
+  tv?: number
+  // Sayımcı nesli (counters.created_at): PIN sıfırlanınca yalnız o sayımcının
+  // eski tokenları düşer, diğerleri etkilenmez.
+  cg?: number
 }
 
 export function hashPassword(pw: string): string {
@@ -91,6 +96,22 @@ export function requireAuth(
   const token = header.startsWith("Bearer ") ? header.slice(7) : ""
   const payload = token ? verifyToken(db, token) : null
   if (!payload) throw new ApiError(401, "Oturum geçersiz, tekrar giriş yap")
+  if (payload.role === "admin" || payload.role === "counter") {
+    const store = db
+      .prepare("SELECT token_version FROM stores WHERE id = ?")
+      .get(payload.storeId) as { token_version: number } | undefined
+    if (!store || (payload.tv ?? 1) !== store.token_version) {
+      throw new ApiError(401, "Oturum geçersiz, tekrar giriş yap")
+    }
+    if (payload.role === "counter") {
+      const counterRow = db
+        .prepare("SELECT created_at FROM counters WHERE store_id = ? AND name = ?")
+        .get(payload.storeId, payload.counter) as { created_at: number } | undefined
+      if (!counterRow || counterRow.created_at !== payload.cg) {
+        throw new ApiError(401, "Oturum geçersiz, tekrar giriş yap")
+      }
+    }
+  }
   if (role === "admin" && payload.role !== "admin") {
     throw new ApiError(403, "Bu işlem için yönetici girişi gerekli")
   }

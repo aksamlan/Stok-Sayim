@@ -67,6 +67,7 @@ async function main() {
       name: "Yük Testi Market",
       countPassword: "say1234",
       adminPassword: "admin1234",
+      email: "yuk-testi@ornek.com",
     },
   })
   const admin = store.token
@@ -281,6 +282,7 @@ async function main() {
   console.log(`Okutma hızı:      ${Math.round((totalEvents / scanMs) * 1000).toLocaleString("tr-TR")} olay/sn (${COUNTERS} paralel)`)
   console.log(`Pano sorgusu:     ort ${ms(avgDash)}`)
   console.log(`Test mağazası:    kod ${store.code} · sayım şifresi say1234 · yönetici admin1234`)
+  console.log("NOT: Gerçek sunucuda koştuysan test mağazasını /yonetim panelinden silmeyi unutma.")
   if (failures === 0) {
     console.log(`\n✅ TÜM KONTROLLER GEÇTİ — veri birebir tutarlı.\n`)
   } else {

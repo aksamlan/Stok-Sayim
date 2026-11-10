@@ -43,6 +43,7 @@ export default function MagazaPage() {
   const [joinPin, setJoinPin] = useState("")
 
   const [newName, setNewName] = useState("")
+  const [newEmail, setNewEmail] = useState("")
   const [countPw, setCountPw] = useState("")
   const [adminPw, setAdminPw] = useState("")
   const [adminPw2, setAdminPw2] = useState("")
@@ -99,6 +100,7 @@ export default function MagazaPage() {
         name: newName,
         countPassword: countPw,
         adminPassword: adminPw,
+        email: newEmail,
       })
       saveAuth({
         token: res.token,
@@ -336,6 +338,22 @@ export default function MagazaPage() {
                           className="h-11"
                           required
                         />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground">
+                          E-posta
+                        </label>
+                        <Input
+                          type="email"
+                          value={newEmail}
+                          onChange={(e) => setNewEmail(e.target.value)}
+                          placeholder="ornek@eposta.com"
+                          className="h-11"
+                          required
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                          Mağaza bilgileri ve silinme uyarıları bu adrese gider.
+                        </p>
                       </div>
                       <div className="space-y-1">
                         <label className="text-xs font-medium text-muted-foreground">

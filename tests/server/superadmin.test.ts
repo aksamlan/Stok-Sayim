@@ -3,7 +3,12 @@ import { ApiError, requireAuth, verifyToken } from "../../lib/server/auth"
 import { recordEvents } from "../../lib/server/counts"
 import { openDatabase } from "../../lib/server/db"
 import { checkRateLimit } from "../../lib/server/ratelimit"
-import { createSession, createStore, joinStore } from "../../lib/server/stores"
+import {
+  createSession,
+  createStore,
+  joinStore,
+  resetCounterPin,
+} from "../../lib/server/stores"
 import {
   deleteStore,
   overview,
@@ -50,6 +55,38 @@ test("counter token rejected for super endpoints", () => {
   }
 })
 
+test("password reset revokes existing tokens", () => {
+  const db = openDatabase(":memory:")
+  const { storeId, code } = createStore(db, "Şube", "say123", "admin123")
+  const { token } = joinStore(db, code, "say123", "Ali", "1111")
+  const req = new Request("http://x", { headers: { Authorization: `Bearer ${token}` } })
+  expect(requireAuth(db, req).counter).toBe("Ali")
+  resetStorePassword(db, storeId, "count", "yeni456")
+  try {
+    requireAuth(db, req)
+    expect.unreachable()
+  } catch (e) {
+    expect((e as ApiError).status).toBe(401)
+  }
+})
+
+test("counter PIN reset revokes only that counter's token", () => {
+  const db = openDatabase(":memory:")
+  const { storeId, code } = createStore(db, "Şube", "say123", "admin123")
+  const ali = joinStore(db, code, "say123", "Ali", "1111")
+  const ayse = joinStore(db, code, "say123", "Ayşe", "2222")
+  resetCounterPin(db, storeId, "Ali")
+  const aliReq = new Request("http://x", { headers: { Authorization: `Bearer ${ali.token}` } })
+  try {
+    requireAuth(db, aliReq)
+    expect.unreachable()
+  } catch (e) {
+    expect((e as ApiError).status).toBe(401)
+  }
+  const ayseReq = new Request("http://x", { headers: { Authorization: `Bearer ${ayse.token}` } })
+  expect(requireAuth(db, ayseReq).counter).toBe("Ayşe")
+})
+
 test("reset store password: old stops working, new works", () => {
   const db = openDatabase(":memory:")
   const { storeId, code } = createStore(db, "Şube", "say123", "admin123")
@@ -82,10 +119,15 @@ test("overview aggregates and delete cascades", () => {
   expect(o.recent).toHaveLength(1)
   expect(o.recent[0].counter).toBe("Ali")
 
+  joinStore(db, code, "say123", "Ayşe", "1111")
   deleteStore(db, storeId)
   const after = overview(db)
   expect(after.stores).toHaveLength(1)
   expect(after.recent).toHaveLength(0)
+  const orphan = db
+    .prepare("SELECT COUNT(*) AS n FROM counters WHERE store_id = ?")
+    .get(storeId) as { n: number }
+  expect(orphan.n).toBe(0)
 })
 
 test("rate limit blocks after limit in window", () => {
