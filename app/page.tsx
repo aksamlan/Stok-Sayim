@@ -1,7 +1,8 @@
 "use client"
 
 import React, { Suspense, useState, useEffect, useRef, useCallback } from "react"
-import { Plus, Minus, Trash2, Download, Upload, Moon, Sun, Search, Volume2, VolumeX, RotateCcw, Camera, ScanBarcode, Package, AlertTriangle, CheckCircle2, XCircle, Zap, ClipboardList, Pencil, PlusCircle, Delete, ImageUp, Share2, FileSpreadsheet, FileText, Printer, ChevronDown } from "lucide-react"
+import Link from "next/link"
+import { Plus, Minus, Trash2, Download, Upload, Moon, Sun, Search, Volume2, VolumeX, RotateCcw, Camera, ScanBarcode, Package, AlertTriangle, CheckCircle2, XCircle, Zap, ClipboardList, Pencil, PlusCircle, Delete, ImageUp, Share2, FileSpreadsheet, FileText, Printer, ChevronDown, Store } from "lucide-react"
 import { Toaster, toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -975,6 +976,18 @@ function InventoryCounterContent() {
             Stok Sayım
           </h1>
           <div className="flex gap-1">
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5"
+              title="Çok kişili mağaza sayımı"
+            >
+              <Link href="/magaza">
+                <Store className="h-4 w-4" />
+                <span className="hidden sm:inline">Mağaza Modu</span>
+              </Link>
+            </Button>
             <Button
               variant="ghost"
               size="icon"
