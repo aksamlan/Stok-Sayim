@@ -40,6 +40,7 @@ export default function MagazaPage() {
   const [joinCode, setJoinCode] = useState("")
   const [joinPassword, setJoinPassword] = useState("")
   const [joinName, setJoinName] = useState("")
+  const [joinPin, setJoinPin] = useState("")
 
   const [newName, setNewName] = useState("")
   const [countPw, setCountPw] = useState("")
@@ -64,6 +65,7 @@ export default function MagazaPage() {
         code: joinCode,
         password: joinPassword,
         counterName: joinName,
+        pin: joinPin,
       })
       saveAuth({
         token: res.token,
@@ -271,19 +273,36 @@ export default function MagazaPage() {
                           required
                         />
                       </div>
-                      <div className="space-y-1">
-                        <label className="text-xs font-medium text-muted-foreground">
-                          Adın (sayımcılar için)
-                        </label>
-                        <Input
-                          value={joinName}
-                          onChange={(e) => setJoinName(e.target.value)}
-                          placeholder="örn. Ayşe"
-                          className="h-11"
-                          autoComplete="off"
-                        />
-                        <p className="text-[11px] text-muted-foreground">
-                          Herkes farklı bir ad kullansın; sayımlar ada göre ayrılır.
+                      <div className="grid grid-cols-[1fr_auto] gap-2">
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-muted-foreground">
+                            Adın (sayımcılar için)
+                          </label>
+                          <Input
+                            value={joinName}
+                            onChange={(e) => setJoinName(e.target.value)}
+                            placeholder="örn. Ayşe"
+                            className="h-11"
+                            autoComplete="off"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-muted-foreground">
+                            PIN
+                          </label>
+                          <Input
+                            type="password"
+                            value={joinPin}
+                            onChange={(e) => setJoinPin(e.target.value)}
+                            placeholder="4+ hane"
+                            className="h-11 w-24"
+                            inputMode="numeric"
+                            autoComplete="off"
+                          />
+                        </div>
+                        <p className="col-span-2 text-[11px] text-muted-foreground">
+                          PIN adını korur: ilk girişte belirlenir, sonraki girişlerde
+                          aynısı istenir. Böylece iki kişinin sayımı asla karışmaz.
                         </p>
                       </div>
                       <Button type="submit" className="w-full h-11" disabled={busy}>

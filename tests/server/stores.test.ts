@@ -7,6 +7,7 @@ import {
   createStore,
   joinStore,
   listSessions,
+  resetCounterPin,
 } from "../../lib/server/stores"
 
 function setup() {
@@ -18,7 +19,7 @@ function setup() {
 test("create store and join as counter", () => {
   const { db, storeId, code } = setup()
   expect(code).toMatch(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/)
-  const joined = joinStore(db, code, "say123", "Ayşe")
+  const joined = joinStore(db, code, "say123", "Ayşe", "1111")
   expect(joined.role).toBe("counter")
   expect(joined.storeName).toBe("Şube 1")
   const payload = verifyToken(db, joined.token)
@@ -28,15 +29,15 @@ test("create store and join as counter", () => {
 
 test("admin password gives admin role", () => {
   const { db, code } = setup()
-  const joined = joinStore(db, code, "admin123", "")
+  const joined = joinStore(db, code, "admin123", "", "")
   expect(joined.role).toBe("admin")
 })
 
 test("wrong password is 401", () => {
   const { db, code } = setup()
-  expect(() => joinStore(db, code, "yanlış", "Ali")).toThrowError(ApiError)
+  expect(() => joinStore(db, code, "yanlış", "Ali", "1111")).toThrowError(ApiError)
   try {
-    joinStore(db, code, "yanlış", "Ali")
+    joinStore(db, code, "yanlış", "Ali", "1111")
   } catch (e) {
     expect((e as ApiError).status).toBe(401)
   }
@@ -45,11 +46,41 @@ test("wrong password is 401", () => {
 test("counter join requires a name", () => {
   const { db, code } = setup()
   try {
-    joinStore(db, code, "say123", "  ")
+    joinStore(db, code, "say123", "  ", "1111")
     expect.unreachable()
   } catch (e) {
     expect((e as ApiError).status).toBe(400)
   }
+})
+
+test("counter PIN protects the name", () => {
+  const { db, code } = setup()
+  // ilk giriş PIN'i kaydeder
+  expect(joinStore(db, code, "say123", "Ayşe", "1111").role).toBe("counter")
+  // aynı isim + doğru PIN tekrar girebilir
+  expect(joinStore(db, code, "say123", "Ayşe", "1111").role).toBe("counter")
+  // aynı isim + yanlış PIN reddedilir (isim çakışması birleşmez)
+  try {
+    joinStore(db, code, "say123", "Ayşe", "2222")
+    expect.unreachable()
+  } catch (e) {
+    expect((e as ApiError).status).toBe(401)
+  }
+  // PIN çok kısa → 400
+  try {
+    joinStore(db, code, "say123", "Yeni", "12")
+    expect.unreachable()
+  } catch (e) {
+    expect((e as ApiError).status).toBe(400)
+  }
+})
+
+test("admin can reset a counter PIN", () => {
+  const { db, storeId, code } = setup()
+  joinStore(db, code, "say123", "Ayşe", "1111")
+  resetCounterPin(db, storeId, "Ayşe")
+  // PIN silindi: isim yeni PIN'le yeniden kaydedilir
+  expect(joinStore(db, code, "say123", "Ayşe", "9999").role).toBe("counter")
 })
 
 test("only one active session per store", () => {
@@ -66,7 +97,7 @@ test("only one active session per store", () => {
 test("stores are isolated: unknown code is 401", () => {
   const { db } = setup()
   try {
-    joinStore(db, "ZZZZZZ", "say123", "Ali")
+    joinStore(db, "ZZZZZZ", "say123", "Ali", "1111")
     expect.unreachable()
   } catch (e) {
     expect((e as ApiError).status).toBe(401)

@@ -9,6 +9,15 @@ export const POST = handle(async (req) => {
     code: string
     password: string
     counterName?: string
+    pin?: string
   }>(req)
-  return json(joinStore(getDb(), body.code ?? "", body.password ?? "", body.counterName ?? ""))
+  return json(
+    joinStore(
+      getDb(),
+      body.code ?? "",
+      body.password ?? "",
+      body.counterName ?? "",
+      body.pin ?? ""
+    )
+  )
 })

@@ -22,6 +22,7 @@ function setup() {
     { barcode: "869001", name: "Süt", category: "Kahvaltılık", expected: 10 },
     { barcode: "869002", name: "Ekmek", category: "Fırın", expected: 5 },
     { barcode: "869003", name: "Yoğurt", category: "Kahvaltılık", expected: 3 },
+    { barcode: "869004", name: "Şeftali İçeceği", category: "İçecek", expected: 2 },
   ])
   const { id: sessionId } = createSession(db, storeId, "Test Sayımı")
   return { db, storeId, sessionId }
@@ -87,6 +88,7 @@ test("problems filter and search", () => {
   expect(problems.rows.map((r) => r.barcode).sort()).toEqual([
     "869002",
     "869003", // only-stock (never counted)
+    "869004", // only-stock (never counted)
     "999999",
   ])
   const search = dashboard(db, storeId, sessionId, {
@@ -154,9 +156,39 @@ test("invalid createdAt rejected with 400", () => {
 
 test("pagination reports rowTotal", () => {
   const { db, storeId, sessionId } = setup()
-  const d = dashboard(db, storeId, sessionId, { filter: "all", page: 1, pageSize: 2 })
-  expect(d.rowTotal).toBe(3)
-  expect(d.rows).toHaveLength(2)
-  const p2 = dashboard(db, storeId, sessionId, { filter: "all", page: 2, pageSize: 2 })
+  const d = dashboard(db, storeId, sessionId, { filter: "all", page: 1, pageSize: 3 })
+  expect(d.rowTotal).toBe(4)
+  expect(d.rows).toHaveLength(3)
+  const p2 = dashboard(db, storeId, sessionId, { filter: "all", page: 2, pageSize: 3 })
   expect(p2.rows).toHaveLength(1)
+})
+
+test("turkish case-insensitive search (İ/ı)", () => {
+  const { db, storeId, sessionId } = setup()
+  const d = dashboard(db, storeId, sessionId, {
+    filter: "all",
+    search: "şeftali iç",
+    page: 1,
+    pageSize: 100,
+  })
+  expect(d.rows.map((r) => r.barcode)).toEqual(["869004"])
+  const upper = dashboard(db, storeId, sessionId, {
+    filter: "all",
+    search: "İÇECEĞİ",
+    page: 1,
+    pageSize: 100,
+  })
+  expect(upper.rows.map((r) => r.barcode)).toEqual(["869004"])
+})
+
+test("distinctCounted only counts catalog barcodes", () => {
+  const { db, storeId, sessionId } = setup()
+  recordEvents(db, storeId, "Ali", [
+    ev(sessionId, "869001", 2),
+    ev(sessionId, "999999", 5), // listede yok: çeşide dahil edilmez
+  ])
+  const d = dashboard(db, storeId, sessionId, { filter: "all", page: 1, pageSize: 100 })
+  expect(d.totals.distinctCounted).toBe(1)
+  expect(d.totals.totalQty).toBe(7)
+  expect(d.totals.unknownCount).toBe(1)
 })

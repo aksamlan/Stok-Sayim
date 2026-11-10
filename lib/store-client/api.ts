@@ -76,8 +76,16 @@ export function apiJoinStore(body: {
   code: string
   password: string
   counterName?: string
+  pin?: string
 }): Promise<JoinResult> {
   return request("/api/store/join", { method: "POST", body })
+}
+
+export function apiResetCounterPin(token: string, name: string): Promise<{ ok: true }> {
+  return request(`/api/counters?name=${encodeURIComponent(name)}`, {
+    method: "DELETE",
+    token,
+  })
 }
 
 export function apiSessions(token: string): Promise<{ sessions: SessionInfo[] }> {

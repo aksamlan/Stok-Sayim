@@ -137,6 +137,19 @@ export async function seedMine(
   )
 }
 
+// Eski sayımlardan kalan yerel "kendi listem" kayıtlarını temizler; cihaz
+// hafızası sayım sayısı kadar büyümez. Kuyruk olaylarına dokunmaz (onları
+// senkron akışı yönetir).
+export async function pruneMineExcept(
+  storeId: string,
+  keepSessionId: string
+): Promise<void> {
+  const db = await openIdb(storeId)
+  const rows = await idbGetAll<MineRow>(db, "mine")
+  const stale = rows.filter((r) => r.sessionId !== keepSessionId).map((r) => r.key)
+  if (stale.length > 0) await idbDelete(db, "mine", stale)
+}
+
 export async function pendingCount(storeId: string): Promise<number> {
   const db = await openIdb(storeId)
   const rows = await idbGetAll<QueuedEvent>(db, "queue")

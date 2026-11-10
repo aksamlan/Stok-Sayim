@@ -3,6 +3,7 @@
 import {
   AlertTriangle,
   ChevronDown,
+  KeyRound,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
@@ -75,6 +76,7 @@ import {
   apiCreateSession,
   apiDashboard,
   apiDashboardExport,
+  apiResetCounterPin,
   apiSessions,
 } from "@/lib/store-client/api"
 import { clearAuth, loadAuth } from "@/lib/store-client/session"
@@ -549,6 +551,7 @@ export default function PanelPage() {
                         <TableHead className="h-9 text-xs text-right">Adet</TableHead>
                         <TableHead className="h-9 text-xs text-right">Çeşit</TableHead>
                         <TableHead className="h-9 text-xs text-right">Son Okutma</TableHead>
+                        <TableHead className="h-9 w-10" />
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -561,6 +564,30 @@ export default function PanelPage() {
                           <TableCell className="py-1.5 text-right tabular-nums">{c.distinct}</TableCell>
                           <TableCell className="py-1.5 text-right text-xs text-muted-foreground">
                             {timeAgo(c.lastAt)}
+                          </TableCell>
+                          <TableCell className="py-1.5">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground"
+                              title="PIN sıfırla (PIN'ini unuttuysa; sayımı silinmez)"
+                              onClick={async () => {
+                                if (!auth) return
+                                try {
+                                  await apiResetCounterPin(auth.token, c.counter)
+                                  toast.success(
+                                    `${c.counter} için PIN sıfırlandı — yeni PIN'le tekrar girebilir`
+                                  )
+                                } catch (err) {
+                                  if (!handleAuthError(err))
+                                    toast.error(
+                                      err instanceof Error ? err.message : "Sıfırlanamadı"
+                                    )
+                                }
+                              }}
+                            >
+                              <KeyRound className="h-3.5 w-3.5" />
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))}

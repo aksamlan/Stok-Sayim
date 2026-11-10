@@ -21,7 +21,13 @@ export const GET = handle((req) => {
   }
   const sinceRaw = params.get("since")
   const since = sinceRaw === null ? undefined : Number(sinceRaw)
-  return json(getCatalog(db, auth.storeId, Number.isFinite(since) ? since : undefined))
+  const result = getCatalog(db, auth.storeId, Number.isFinite(since) ? since : undefined)
+  // Beklenen stok adedi yalnız yöneticiye gider; sayımcılar ürün adı ve
+  // kategoriyi görür ama stok rakamlarını göremez.
+  if (auth.role !== "admin" && result.items) {
+    result.items = result.items.map((i) => ({ ...i, expected: null }))
+  }
+  return json(result)
 })
 
 export const PUT = handle(async (req) => {

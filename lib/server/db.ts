@@ -44,6 +44,13 @@ CREATE TABLE IF NOT EXISTS scan_events (
 );
 CREATE INDEX IF NOT EXISTS idx_events_barcode ON scan_events(store_id, session_id, barcode);
 CREATE INDEX IF NOT EXISTS idx_events_counter ON scan_events(store_id, session_id, counter);
+CREATE TABLE IF NOT EXISTS counters (
+  store_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  pin_hash TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (store_id, name)
+);
 `
 
 // Gelecek sürümlerde şema değişiklikleri buraya eklenir (her giriş bir sürüm):
@@ -80,6 +87,11 @@ export function openDatabase(dbPath: string): DatabaseSync {
   }
   db.exec("PRAGMA foreign_keys=ON")
   db.exec(SCHEMA)
+  // SQLite'ın NOCASE'i ASCII-dışını (İ/ı/Ş...) tanımaz; Türkçe arama için
+  // JS'in tr-locale küçük harfe çevirmesini SQL'e fonksiyon olarak veriyoruz.
+  db.function("tr_lower", { deterministic: true }, (value: unknown) =>
+    value == null ? null : String(value).toLocaleLowerCase("tr")
+  )
   applyMigrations(db)
   return db
 }

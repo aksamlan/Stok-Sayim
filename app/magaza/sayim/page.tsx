@@ -46,6 +46,7 @@ import {
   enqueueScan,
   getMine,
   lastKnownSession,
+  pruneMineExcept,
   rememberSession,
   seedMine,
   startSync,
@@ -143,6 +144,7 @@ export default function SayimPage() {
             } catch {}
           }
           if (!cancelled) setItems(await getMine(a.storeId, active.id))
+          void pruneMineExcept(a.storeId, active.id)
         } else {
           setNoSession(true)
         }
@@ -201,6 +203,7 @@ export default function SayimPage() {
         setNoSession(false)
         void rememberSession(auth.storeId, active.id, active.name)
         setItems(await getMine(auth.storeId, active.id))
+        void pruneMineExcept(auth.storeId, active.id)
         setLastScan(null)
         toast.info(`Yeni sayıma geçildi: ${active.name}`)
       } else if (!active && current) {

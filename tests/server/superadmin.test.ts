@@ -38,7 +38,7 @@ test("super login roundtrip and role", () => {
 test("counter token rejected for super endpoints", () => {
   const db = openDatabase(":memory:")
   const { code } = createStore(db, "Şube", "say123", "admin123")
-  const { token } = joinStore(db, code, "say123", "Ali")
+  const { token } = joinStore(db, code, "say123", "Ali", "1111")
   const req = new Request("http://x", {
     headers: { Authorization: `Bearer ${token}` },
   })
@@ -55,14 +55,14 @@ test("reset store password: old stops working, new works", () => {
   const { storeId, code } = createStore(db, "Şube", "say123", "admin123")
   resetStorePassword(db, storeId, "count", "yeni456")
   try {
-    joinStore(db, code, "say123", "Ali")
+    joinStore(db, code, "say123", "Ali", "1111")
     expect.unreachable()
   } catch (e) {
     expect((e as ApiError).status).toBe(401)
   }
-  expect(joinStore(db, code, "yeni456", "Ali").role).toBe("counter")
+  expect(joinStore(db, code, "yeni456", "Ali", "1111").role).toBe("counter")
   resetStorePassword(db, storeId, "admin", "patron789")
-  expect(joinStore(db, code, "patron789", "").role).toBe("admin")
+  expect(joinStore(db, code, "patron789", "", "").role).toBe("admin")
 })
 
 test("overview aggregates and delete cascades", () => {

@@ -17,6 +17,6 @@ export const POST = handle(async (req) => {
     body.countPassword ?? "",
     body.adminPassword ?? ""
   )
-  const joined = joinStore(db, code, body.adminPassword, "")
+  const joined = joinStore(db, code, body.adminPassword, "", "")
   return json({ code, ...joined })
 })

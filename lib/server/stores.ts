@@ -62,7 +62,8 @@ export function joinStore(
   db: DatabaseSync,
   code: string,
   password: string,
-  counterName: string
+  counterName: string,
+  pin: string
 ): { token: string; role: "counter" | "admin"; storeId: string; storeName: string } {
   const row = db
     .prepare("SELECT * FROM stores WHERE code = ?")
@@ -76,10 +77,35 @@ export function joinStore(
   if (verifyPassword(password, row.count_pw_hash)) {
     const counter = counterName.trim()
     if (!counter) throw new ApiError(400, "Adını yazman gerekli")
+    if (pin.trim().length < 4) {
+      throw new ApiError(400, "PIN en az 4 haneli olmalı")
+    }
+    // PIN ismi korur: ilk giren PIN'ini kaydeder, aynı ismi yanlış PIN'le
+    // giren başka biri reddedilir — iki kişinin sayımı asla birbirine karışmaz.
+    const existing = db
+      .prepare("SELECT pin_hash FROM counters WHERE store_id = ? AND name = ?")
+      .get(row.id, counter) as { pin_hash: string } | undefined
+    if (existing) {
+      if (!verifyPassword(pin.trim(), existing.pin_hash)) {
+        throw new ApiError(
+          401,
+          "Bu isim kayıtlı ama PIN yanlış. PIN'ini doğru gir ya da farklı bir isim seç."
+        )
+      }
+    } else {
+      db.prepare(
+        "INSERT INTO counters (store_id, name, pin_hash, created_at) VALUES (?, ?, ?, ?)"
+      ).run(row.id, counter, hashPassword(pin.trim()), Date.now())
+    }
     const token = signToken(db, { storeId: row.id, role: "counter", counter, exp })
     return { token, role: "counter", storeId: row.id, storeName: row.name }
   }
   throw new ApiError(401, "Kod veya şifre hatalı")
+}
+
+// Yönetici, PIN'ini unutan sayımcının kaydını siler; isim yeni PIN'le yeniden alınır.
+export function resetCounterPin(db: DatabaseSync, storeId: string, name: string): void {
+  db.prepare("DELETE FROM counters WHERE store_id = ? AND name = ?").run(storeId, name)
 }
 
 export type SessionInfo = {

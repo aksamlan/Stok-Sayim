@@ -113,6 +113,10 @@ export function myCounts(
     .all(storeId, sessionId, counter) as { barcode: string; qty: number }[]
 }
 
+// Ağır birleşim (products × olay toplamları) istek başına TEK kez çalışır:
+// sonuç geçici tabloya yazılır; satırlar, sayfa toplamı, kategori kırılımı ve
+// özet rakamlar oradan okunur. DatabaseSync senkron olduğu için istekler
+// arasında temp tablo çakışması olmaz.
 const ROWS_CTE = `
 WITH agg AS (
   SELECT barcode, SUM(qty) AS counted
@@ -168,88 +172,115 @@ export function dashboard(
     whereParams.push(opts.category)
   }
   if (opts.search?.trim()) {
-    where.push("(barcode LIKE ? OR name LIKE ? COLLATE NOCASE)")
-    const like = `%${opts.search.trim()}%`
-    whereParams.push(like, like)
+    where.push("(barcode LIKE ? OR tr_lower(name) LIKE ?)")
+    whereParams.push(
+      `%${opts.search.trim()}%`,
+      `%${opts.search.trim().toLocaleLowerCase("tr")}%`
+    )
   }
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : ""
   const cteParams = [storeId, sessionId, storeId, storeId]
 
-  const rows = db
-    .prepare(
-      `${ROWS_CTE} SELECT * FROM statused ${whereSql}
-       ORDER BY (status = 'only-count') DESC, category IS NULL, category, barcode
-       LIMIT ? OFFSET ?`
-    )
-    .all(...cteParams, ...whereParams, pageSize, (page - 1) * pageSize) as DashboardRow[]
+  db.exec("DROP TABLE IF EXISTS temp.dash_rows")
+  db.prepare(
+    `CREATE TEMP TABLE dash_rows AS ${ROWS_CTE} SELECT * FROM statused`
+  ).run(...cteParams)
+  try {
+    const rows = db
+      .prepare(
+        `SELECT barcode, name, category, expected, counted, status FROM temp.dash_rows ${whereSql}
+         ORDER BY (status = 'only-count') DESC, category IS NULL, category, barcode
+         LIMIT ? OFFSET ?`
+      )
+      .all(...whereParams, pageSize, (page - 1) * pageSize) as DashboardRow[]
 
-  const rowTotal = (
-    db
-      .prepare(`${ROWS_CTE} SELECT COUNT(*) AS n FROM statused ${whereSql}`)
-      .get(...cteParams, ...whereParams) as { n: number }
-  ).n
+    const rowTotal = (
+      db
+        .prepare(`SELECT COUNT(*) AS n FROM temp.dash_rows ${whereSql}`)
+        .get(...whereParams) as { n: number }
+    ).n
 
-  const totalsRow = db
-    .prepare(
-      `SELECT COALESCE(SUM(t), 0) AS totalQty, COUNT(*) AS distinctCounted FROM (
-         SELECT SUM(qty) AS t FROM scan_events WHERE store_id = ? AND session_id = ?
-         GROUP BY barcode HAVING SUM(qty) <> 0
-       )`
-    )
-    .get(storeId, sessionId) as { totalQty: number; distinctCounted: number }
+    const totalsRow = db
+      .prepare(
+        `SELECT COALESCE(SUM(counted), 0) AS totalQty,
+           COALESCE(SUM(counted <> 0 AND status <> 'only-count'), 0) AS distinctCounted,
+           COALESCE(SUM(status = 'only-count'), 0) AS unknownCount,
+           COALESCE(SUM(status <> 'only-count'), 0) AS catalogCount
+         FROM temp.dash_rows`
+      )
+      .get() as {
+      totalQty: number
+      distinctCounted: number
+      unknownCount: number
+      catalogCount: number
+    }
 
-  const countersRow = db
-    .prepare(
-      "SELECT COUNT(DISTINCT counter) AS n FROM scan_events WHERE store_id = ? AND session_id = ?"
-    )
-    .get(storeId, sessionId) as { n: number }
+    const countersRow = db
+      .prepare(
+        "SELECT COUNT(DISTINCT counter) AS n FROM scan_events WHERE store_id = ? AND session_id = ?"
+      )
+      .get(storeId, sessionId) as { n: number }
 
-  const unknownRow = db
-    .prepare(
-      `SELECT COUNT(*) AS n FROM (
-         SELECT barcode, SUM(qty) AS t FROM scan_events
-         WHERE store_id = ? AND session_id = ? GROUP BY barcode HAVING SUM(qty) <> 0
-       ) a
-       WHERE NOT EXISTS (SELECT 1 FROM products p WHERE p.store_id = ? AND p.barcode = a.barcode)`
-    )
-    .get(storeId, sessionId, storeId) as { n: number }
+    const byCounter = db
+      .prepare(
+        `SELECT counter, COALESCE(SUM(qty), 0) AS qty, COUNT(DISTINCT barcode) AS distinct_n,
+                MAX(created_at) AS lastAt
+         FROM scan_events WHERE store_id = ? AND session_id = ?
+         GROUP BY counter ORDER BY qty DESC`
+      )
+      .all(storeId, sessionId) as {
+      counter: string
+      qty: number
+      distinct_n: number
+      lastAt: number
+    }[]
 
-  const byCounter = db
-    .prepare(
-      `SELECT counter, COALESCE(SUM(qty), 0) AS qty, COUNT(DISTINCT barcode) AS distinct_n,
-              MAX(created_at) AS lastAt
-       FROM scan_events WHERE store_id = ? AND session_id = ?
-       GROUP BY counter ORDER BY qty DESC`
-    )
-    .all(storeId, sessionId) as {
-    counter: string
-    qty: number
-    distinct_n: number
-    lastAt: number
-  }[]
+    const byCategory = db
+      .prepare(
+        `SELECT category, COALESCE(SUM(counted), 0) AS counted,
+           COALESCE(SUM(expected), 0) AS expected,
+           SUM(counted <> 0) AS distinct_n
+         FROM temp.dash_rows GROUP BY category
+         ORDER BY category IS NULL, category`
+      )
+      .all() as {
+      category: string | null
+      counted: number
+      expected: number
+      distinct_n: number
+    }[]
 
-  const byCategory = db
-    .prepare(
-      `${ROWS_CTE} SELECT category, COALESCE(SUM(counted), 0) AS counted,
-         COALESCE(SUM(expected), 0) AS expected,
-         SUM(counted <> 0) AS distinct_n
-       FROM statused GROUP BY category
-       ORDER BY category IS NULL, category`
-    )
-    .all(...cteParams) as {
+    return buildResult(totalsRow, countersRow.n, byCounter, byCategory, rows, rowTotal)
+  } finally {
+    db.exec("DROP TABLE IF EXISTS temp.dash_rows")
+  }
+}
+
+function buildResult(
+  totals: {
+    totalQty: number
+    distinctCounted: number
+    unknownCount: number
+    catalogCount: number
+  },
+  counters: number,
+  byCounter: { counter: string; qty: number; distinct_n: number; lastAt: number }[],
+  byCategory: {
     category: string | null
     counted: number
     expected: number
     distinct_n: number
-  }[]
-
+  }[],
+  rows: DashboardRow[],
+  rowTotal: number
+): DashboardResult {
   return {
     totals: {
-      totalQty: totalsRow.totalQty,
-      distinctCounted: totalsRow.distinctCounted,
-      counters: countersRow.n,
-      unknownCount: unknownRow.n,
-      catalogCount: catalogSize(db, storeId),
+      totalQty: totals.totalQty,
+      distinctCounted: totals.distinctCounted,
+      counters,
+      unknownCount: totals.unknownCount,
+      catalogCount: totals.catalogCount,
     },
     byCounter: byCounter.map((c) => ({
       counter: c.counter,
