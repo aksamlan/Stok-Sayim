@@ -199,8 +199,14 @@ server {
     listen [::]:80;
     server_name stok.alanadin.com;
 
-    # Katalog yüklemesi ~8 MB JSON gönderir; nginx varsayılanı 1 MB (413 verir).
+    # Katalog yüklemesi ~10 MB JSON gönderir; nginx varsayılanı 1 MB (413 verir).
     client_max_body_size 20m;
+
+    # Katalog indirmesi ~10 MB JSON'dur; sıkıştırma telefonda 5-10 kat hız demektir.
+    gzip on;
+    gzip_types application/json text/plain text/css application/javascript;
+    gzip_min_length 1024;
+    gzip_comp_level 5;
 
     location / {
         proxy_pass http://127.0.0.1:3000;

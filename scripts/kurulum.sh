@@ -144,6 +144,8 @@ alan_adi_bagla() {
   fi
   cat > /etc/caddy/Caddyfile <<CADDYEOF
 $domain {
+	# 100k ürünlük katalog ~10 MB JSON'dur; sıkıştırma ile ~1.5 MB iner.
+	encode zstd gzip
 	reverse_proxy localhost:3000
 }
 CADDYEOF
