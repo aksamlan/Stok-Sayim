@@ -19,8 +19,9 @@ import {
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Toaster, toast } from "sonner"
+import Link from "next/link"
 import { CameraScanner } from "@/components/camera-scanner"
-import { PoweredByStokzen } from "@/components/stokzen"
+import { PoweredByStokzen, StokzenLogo } from "@/components/stokzen"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -387,7 +388,11 @@ export default function SayimPage() {
       <div className="container mx-auto p-3 sm:p-5 max-w-3xl">
         {/* Üst bar */}
         <div className="flex items-center justify-between gap-2 mb-3">
-          <div className="min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <Link href="/" title="Ana sayfa" className="shrink-0">
+              <StokzenLogo className="h-7 w-7" />
+            </Link>
+            <div className="min-w-0">
             <h1 className="text-base sm:text-lg font-bold tracking-tight truncate">
               {auth.storeName}
             </h1>
@@ -395,6 +400,7 @@ export default function SayimPage() {
               {auth.role === "admin" ? "Yönetici" : auth.counter}
               {session ? ` · ${session.name}` : ""}
             </p>
+            </div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             {syncBadge}

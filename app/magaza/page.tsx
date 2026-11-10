@@ -135,7 +135,9 @@ export default function MagazaPage() {
       <div className="container mx-auto p-3 sm:p-5 max-w-md">
         <div className="flex items-center justify-between mb-4">
           <h1 className="flex items-center gap-2 text-lg sm:text-xl font-bold tracking-tight">
-            <StokzenWordmark className="text-lg sm:text-xl" />
+            <Link href="/" title="Ana sayfa">
+              <StokzenWordmark className="text-lg sm:text-xl" />
+            </Link>
             <Badge variant="secondary" className="ml-1">
               Mağaza Modu
             </Badge>

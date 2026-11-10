@@ -11,6 +11,7 @@ import {
   Sun,
   Trash2,
 } from "lucide-react"
+import Link from "next/link"
 import { useCallback, useEffect, useState } from "react"
 import { Toaster, toast } from "sonner"
 import { PoweredByStokzen, StokzenWordmark } from "@/components/stokzen"
@@ -218,7 +219,9 @@ export default function YonetimPage() {
       <div className="container mx-auto p-3 sm:p-5 max-w-5xl">
         <div className="flex items-center justify-between gap-2 mb-4">
           <h1 className="flex items-center gap-2 text-base sm:text-lg font-bold tracking-tight">
-            <StokzenWordmark className="text-base sm:text-lg" />
+            <Link href="/" title="Ana sayfa">
+              <StokzenWordmark className="text-base sm:text-lg" />
+            </Link>
             <Badge variant="secondary">
               <ShieldCheck className="h-3 w-3 mr-1" />
               Platform Yönetimi

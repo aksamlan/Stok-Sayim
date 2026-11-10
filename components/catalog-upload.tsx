@@ -1,6 +1,6 @@
 "use client"
 
-import { FileSpreadsheet, Loader2, Upload } from "lucide-react"
+import { Download, FileSpreadsheet, Loader2, Upload } from "lucide-react"
 import { useRef, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -112,15 +112,45 @@ export function CatalogUpload({
       </CardHeader>
       <CardContent className="p-3">
         {!parsed ? (
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-9"
-            onClick={() => fileRef.current?.click()}
-          >
-            <Upload className="h-4 w-4 mr-1" />
-            Dosya Seç
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9"
+              onClick={() => fileRef.current?.click()}
+            >
+              <Upload className="h-4 w-4 mr-1" />
+              Dosya Seç
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 text-muted-foreground"
+              title="Doldurulacak örnek Excel şablonunu indir"
+              onClick={async () => {
+                const XLSX = await import("xlsx")
+                const ws = XLSX.utils.aoa_to_sheet([
+                  ["Barkod", "Ürün Adı", "Kategori", "Stok"],
+                  ["8690123456789", "Süt 1L Tam Yağlı", "Kahvaltılık", 24],
+                  ["8691234567890", "Köy Ekmeği 500g", "Fırın", 15],
+                  ["8690555444333", "Çikolatalı Gofret", "Atıştırmalık", 48],
+                  ["4001686315358", "Sakızlı Şeker", "Atıştırmalık", ""],
+                ])
+                ws["!cols"] = [{ wch: 18 }, { wch: 30 }, { wch: 16 }, { wch: 8 }]
+                const wb = XLSX.utils.book_new()
+                XLSX.utils.book_append_sheet(wb, ws, "Ürünler")
+                XLSX.writeFile(wb, "stokzen-ornek-urun-listesi.xlsx")
+              }}
+            >
+              <Download className="h-4 w-4 mr-1" />
+              Örnek Excel İndir
+            </Button>
+            <p className="w-full text-[11px] text-muted-foreground">
+              Şablondaki Kategori ve Stok sütunları isteğe bağlıdır; Barkod
+              sütununu Excel&apos;de <b>Metin</b> biçiminde tut ki uzun barkodlar
+              bozulmasın.
+            </p>
+          </div>
         ) : (
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">

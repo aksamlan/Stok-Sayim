@@ -5,6 +5,8 @@ import Link from "next/link"
 import { Plus, Minus, Trash2, Download, Upload, Moon, Sun, Search, Volume2, VolumeX, RotateCcw, Camera, ScanBarcode, Package, AlertTriangle, CheckCircle2, XCircle, Zap, ClipboardList, Pencil, PlusCircle, Delete, ImageUp, Share2, FileSpreadsheet, FileText, Printer, ChevronDown, Store } from "lucide-react"
 import { Toaster, toast } from "sonner"
 import { PoweredByStokzen } from "@/components/stokzen"
+import { loadAuth } from "@/lib/store-client/session"
+import type { StoreAuth } from "@/lib/store-client/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -90,6 +92,10 @@ function InventoryCounterContent() {
   const [quickQty, setQuickQty] = useState(1)
   const [searchQuery, setSearchQuery] = useState("")
   const [darkMode, setDarkMode] = useState(false)
+  const [magazaAuth, setMagazaAuth] = useState<StoreAuth | null>(null)
+  useEffect(() => {
+    setMagazaAuth(loadAuth())
+  }, [])
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [lastScanned, setLastScanned] = useState<string | null>(null)
   const [lastScannedPersistent, setLastScannedPersistent] = useState<string | null>(null)
@@ -980,18 +986,40 @@ function InventoryCounterContent() {
             <span className="hidden sm:inline text-muted-foreground font-medium">Stok Sayım</span>
           </h1>
           <div className="flex gap-1">
-            <Button
-              asChild
-              variant="outline"
-              size="sm"
-              className="h-8 gap-1.5"
-              title="Çok kişili mağaza sayımı"
-            >
-              <Link href="/magaza">
-                <Store className="h-4 w-4" />
-                <span className="hidden sm:inline">Mağaza Modu</span>
-              </Link>
-            </Button>
+            {magazaAuth ? (
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 max-w-44"
+                title={`${magazaAuth.storeName} mağazasına devam et`}
+              >
+                <Link
+                  href={magazaAuth.role === "admin" ? "/magaza/panel" : "/magaza/sayim"}
+                >
+                  <Store className="h-4 w-4 shrink-0 text-primary" />
+                  <span className="truncate">
+                    {magazaAuth.storeName}
+                    <span className="hidden sm:inline text-muted-foreground">
+                      {" "}· devam
+                    </span>
+                  </span>
+                </Link>
+              </Button>
+            ) : (
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5"
+                title="Çok kişili mağaza sayımı"
+              >
+                <Link href="/magaza">
+                  <Store className="h-4 w-4" />
+                  <span className="hidden sm:inline">Mağaza Modu</span>
+                </Link>
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"

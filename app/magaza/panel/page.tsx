@@ -22,6 +22,7 @@ import {
   Sun,
   Users,
 } from "lucide-react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Toaster, toast } from "sonner"
@@ -357,7 +358,9 @@ export default function PanelPage() {
         <div className="flex items-center justify-between gap-2 mb-3">
           <div className="min-w-0">
             <h1 className="flex items-center gap-2 text-base sm:text-lg font-bold tracking-tight">
-              <StokzenWordmark className="text-base sm:text-lg" />
+              <Link href="/" title="Ana sayfa">
+                <StokzenWordmark className="text-base sm:text-lg" />
+              </Link>
               <span className="text-muted-foreground font-normal truncate">
                 · {auth.storeName}
               </span>
