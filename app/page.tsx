@@ -18,7 +18,7 @@ const modes = [
       { icon: WifiOff, text: "İnternetsiz çalışır" },
       { icon: FileSpreadsheet, text: "Excel / CSV / PDF çıktısı" },
     ],
-    tone: "from-blue-600 to-indigo-600",
+    tone: "bg-primary",
   },
   {
     href: "/magaza",
@@ -31,7 +31,7 @@ const modes = [
       { icon: FileSpreadsheet, text: "Ürün kataloğu ve karşılaştırma" },
       { icon: Zap, text: "Canlı yönetici panosu" },
     ],
-    tone: "from-violet-600 to-fuchsia-600",
+    tone: "bg-slate-800 dark:bg-slate-700",
   },
 ]
 
@@ -67,10 +67,10 @@ export default function Home() {
             <Link
               key={m.href}
               href={m.href}
-              className="group relative overflow-hidden rounded-2xl border bg-card shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-[3px] focus-visible:ring-ring/50 outline-none"
+              className="group relative overflow-hidden rounded-lg border bg-card transition-colors hover:border-primary focus-visible:ring-[3px] focus-visible:ring-ring/50 outline-none"
             >
-              <div className={`flex items-center gap-3 bg-gradient-to-br ${m.tone} p-4 text-white`}>
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/20 ring-1 ring-white/30">
+              <div className={`flex items-center gap-3 ${m.tone} p-4 text-white`}>
+                <span className="flex h-11 w-11 items-center justify-center rounded-md bg-white/15">
                   <m.icon className="h-6 w-6" />
                 </span>
                 <div>
@@ -87,7 +87,7 @@ export default function Home() {
                     </li>
                   ))}
                 </ul>
-                <div className="flex items-center justify-between rounded-lg bg-primary/10 px-3 py-2 text-sm font-semibold text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                <div className="flex items-center justify-between rounded-md bg-primary/10 px-3 py-2 text-sm font-semibold text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
                   {m.cta}
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                 </div>

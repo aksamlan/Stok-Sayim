@@ -87,6 +87,16 @@ function applyMigrations(db: DatabaseSync, fresh: boolean): void {
     return
   }
   const raw = getMeta(db, "schema_version")
+  if (!raw) {
+    // Sürüm damgası yok: ya yönetici-şifre scripti meta tablosunu uygulamadan
+    // ÖNCE yarattı (şema zaten güncel), ya da gerçekten eski bir veritabanı.
+    // Son migrasyonun kolonu varsa şema günceldir: yalnız damgala.
+    const cols = db.prepare("PRAGMA table_info(stores)").all() as { name: string }[]
+    if (cols.some((c) => c.name === "last_seen_at")) {
+      setMeta(db, "schema_version", String(SCHEMA_TARGET))
+      return
+    }
+  }
   let current = raw ? Number(raw) : 1
   if (!Number.isFinite(current) || current < 1) current = 1
   for (let v = current; v < SCHEMA_TARGET; v++) {
@@ -112,10 +122,11 @@ export function openDatabase(dbPath: string): DatabaseSync {
     db.exec("PRAGMA journal_mode=WAL")
   }
   db.exec("PRAGMA foreign_keys=ON")
-  // Tazelik tespiti SCHEMA'dan ÖNCE yapılmalı: meta tablosu hiç yoksa bu
+  // Tazelik tespiti SCHEMA'dan ÖNCE yapılmalı: stores tablosu hiç yoksa bu
+  // (meta tek başına yeterli değil: yonetici-sifre.mjs onu önceden yaratır) bu
   // yepyeni bir veritabanıdır ve SCHEMA zaten güncel halini kurar.
   const fresh = !db
-    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='meta'")
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='stores'")
     .get()
   db.exec(SCHEMA)
   // SQLite'ın NOCASE'i ASCII-dışını (İ/ı/Ş...) tanımaz; Türkçe arama için

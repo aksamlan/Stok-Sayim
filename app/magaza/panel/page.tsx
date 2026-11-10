@@ -92,19 +92,19 @@ import { useDarkMode } from "@/lib/store-client/use-dark-mode"
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   match: {
     label: "Eşit",
-    cls: "bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30 hover:bg-green-500/15",
+    cls: "bg-green-100 text-green-800 border-green-200 dark:bg-green-500/15 dark:text-green-400 dark:border-green-500/30",
   },
   difference: {
     label: "Farklı",
-    cls: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/15",
+    cls: "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-500/15 dark:text-amber-400 dark:border-amber-500/30",
   },
   "only-stock": {
     label: "Sayılmadı",
-    cls: "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30 hover:bg-red-500/15",
+    cls: "bg-red-100 text-red-800 border-red-200 dark:bg-red-500/15 dark:text-red-400 dark:border-red-500/30",
   },
   "only-count": {
     label: "Listede yok",
-    cls: "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30 hover:bg-blue-500/15",
+    cls: "bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-500/15 dark:text-sky-400 dark:border-sky-500/30",
   },
 }
 
@@ -507,34 +507,36 @@ export default function PanelPage() {
         ) : (
           <>
             {/* Canlı özet */}
-            <div className="flex items-stretch gap-2 mb-3 flex-wrap">
-              <div className="rounded-lg border bg-card px-3 py-1.5">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Toplam Adet</p>
-                <p className="text-lg font-bold tabular-nums leading-tight">
-                  {dash.totals.totalQty.toLocaleString("tr-TR")}
-                </p>
+            <div className="flex flex-col sm:flex-row items-stretch gap-2 mb-3">
+              <div className="grid flex-1 grid-cols-2 sm:grid-cols-4 divide-x divide-y sm:divide-y-0 overflow-hidden rounded-lg border bg-card">
+                <div className="px-3 py-2.5">
+                  <p className="text-[11px] font-medium text-muted-foreground">Toplam adet</p>
+                  <p className="text-2xl font-bold tabular-nums leading-tight">
+                    {dash.totals.totalQty.toLocaleString("tr-TR")}
+                  </p>
+                </div>
+                <div className="px-3 py-2.5">
+                  <p className="text-[11px] font-medium text-muted-foreground">Sayılan çeşit</p>
+                  <p className="text-2xl font-bold tabular-nums leading-tight">
+                    {dash.totals.distinctCounted.toLocaleString("tr-TR")}
+                    <span className="text-sm font-normal text-muted-foreground">
+                      {" "}/ {dash.totals.catalogCount.toLocaleString("tr-TR")}
+                    </span>
+                  </p>
+                </div>
+                <div className="px-3 py-2.5">
+                  <p className="text-[11px] font-medium text-muted-foreground">Sayımcı</p>
+                  <p className="text-2xl font-bold tabular-nums leading-tight">{dash.totals.counters}</p>
+                </div>
+                <div className={`px-3 py-2.5 ${dash.totals.unknownCount > 0 ? "bg-amber-50 dark:bg-amber-500/10" : ""}`}>
+                  <p className="text-[11px] font-medium text-muted-foreground">Listede yok</p>
+                  <p className={`text-2xl font-bold tabular-nums leading-tight ${dash.totals.unknownCount > 0 ? "text-amber-700 dark:text-amber-400" : ""}`}>{dash.totals.unknownCount}</p>
+                </div>
               </div>
-              <div className="rounded-lg border bg-card px-3 py-1.5">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Sayılan Çeşit</p>
-                <p className="text-lg font-bold tabular-nums leading-tight">
-                  {dash.totals.distinctCounted.toLocaleString("tr-TR")}
-                  <span className="text-xs font-normal text-muted-foreground">
-                    {" "}/ {dash.totals.catalogCount.toLocaleString("tr-TR")}
-                  </span>
-                </p>
-              </div>
-              <div className="rounded-lg border bg-card px-3 py-1.5">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Sayımcı</p>
-                <p className="text-lg font-bold tabular-nums leading-tight">{dash.totals.counters}</p>
-              </div>
-              <div className={`rounded-lg border px-3 py-1.5 ${dash.totals.unknownCount > 0 ? "border-amber-500/40 bg-amber-500/10" : "bg-card"}`}>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Listede Yok</p>
-                <p className="text-lg font-bold tabular-nums leading-tight">{dash.totals.unknownCount}</p>
-              </div>
-              <div className="ml-auto flex items-end">
+              <div className="flex sm:items-stretch [&>*]:w-full sm:[&>*]:w-auto">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button size="sm" className="h-9" disabled={exportBusy}>
+                    <Button size="sm" className="h-10 sm:h-full sm:px-4" disabled={exportBusy}>
                       {exportBusy ? (
                         <Loader2 className="h-4 w-4 mr-1 animate-spin" />
                       ) : (
