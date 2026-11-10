@@ -2,6 +2,7 @@ import React from "react"
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import { SwRegister } from '@/components/sw-register'
 import './globals.css'
 
 const _geist = Geist({ subsets: ["latin"] });
@@ -40,6 +41,7 @@ export default function RootLayout({
     <html lang="tr">
       <body className={`font-sans antialiased`}>
         {children}
+        <SwRegister />
         <Analytics />
       </body>
     </html>

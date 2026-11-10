@@ -94,6 +94,12 @@ export function apiGetCatalog(
   return request(`/api/catalog${q}`, { token })
 }
 
+export function apiCatalogCount(
+  token: string
+): Promise<{ version: number; count: number }> {
+  return request("/api/catalog?countOnly=1", { token })
+}
+
 export function apiPutCatalog(
   token: string,
   items: CatalogItem[]

@@ -70,6 +70,7 @@ import {
 } from "@/lib/export"
 import {
   AuthExpiredError,
+  apiCatalogCount,
   apiCloseSession,
   apiCreateSession,
   apiDashboard,
@@ -125,6 +126,7 @@ export default function PanelPage() {
   const [newSessionName, setNewSessionName] = useState("")
   const [closeConfirm, setCloseConfirm] = useState(false)
   const [exportBusy, setExportBusy] = useState(false)
+  const [catalogCount, setCatalogCount] = useState(0)
   const searchRef = useRef(search)
   searchRef.current = search
 
@@ -164,6 +166,24 @@ export default function PanelPage() {
   useEffect(() => {
     void refreshSessions()
   }, [refreshSessions])
+
+  const refreshCatalogCount = useCallback(async () => {
+    if (!auth) return
+    try {
+      const { count } = await apiCatalogCount(auth.token)
+      setCatalogCount(count)
+    } catch (err) {
+      handleAuthError(err)
+    }
+  }, [auth, handleAuthError])
+
+  useEffect(() => {
+    void refreshCatalogCount()
+  }, [refreshCatalogCount])
+
+  useEffect(() => {
+    if (dash) setCatalogCount(dash.totals.catalogCount)
+  }, [dash])
 
   const refreshDashboard = useCallback(async () => {
     if (!auth || !activeSession) return
@@ -386,8 +406,11 @@ export default function PanelPage() {
         {/* Katalog yükleme */}
         <CatalogUpload
           token={auth.token}
-          catalogCount={dash?.totals.catalogCount ?? 0}
-          onUploaded={() => void refreshDashboard()}
+          catalogCount={catalogCount}
+          onUploaded={() => {
+            void refreshCatalogCount()
+            void refreshDashboard()
+          }}
         />
 
         {sessions === null ? (

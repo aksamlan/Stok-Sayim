@@ -1,5 +1,7 @@
 import { requireAuth } from "@/lib/server/auth"
 import {
+  catalogSize,
+  catalogVersion,
   getCatalog,
   replaceCatalog,
   type CatalogItem,
@@ -10,7 +12,14 @@ import { handle, json, readBody } from "@/lib/server/http"
 export const GET = handle((req) => {
   const db = getDb()
   const auth = requireAuth(db, req)
-  const sinceRaw = new URL(req.url).searchParams.get("since")
+  const params = new URL(req.url).searchParams
+  if (params.get("countOnly")) {
+    return json({
+      version: catalogVersion(db, auth.storeId),
+      count: catalogSize(db, auth.storeId),
+    })
+  }
+  const sinceRaw = params.get("since")
   const since = sinceRaw === null ? undefined : Number(sinceRaw)
   return json(getCatalog(db, auth.storeId, Number.isFinite(since) ? since : undefined))
 })
