@@ -1,7 +1,7 @@
 "use client"
 
 import React, { Suspense, useState, useEffect, useRef, useCallback } from "react"
-import { Plus, Minus, Trash2, Download, Upload, Moon, Sun, Search, Volume2, VolumeX, RotateCcw, Camera, ScanBarcode, Package, AlertTriangle, CheckCircle2, XCircle, Zap, ClipboardList, Pencil, PlusCircle, Delete } from "lucide-react"
+import { Plus, Minus, Trash2, Download, Upload, Moon, Sun, Search, Volume2, VolumeX, RotateCcw, Camera, ScanBarcode, Package, AlertTriangle, CheckCircle2, XCircle, Zap, ClipboardList, Pencil, PlusCircle, Delete, ImageUp, Share2, FileSpreadsheet, FileText, Printer, ChevronDown } from "lucide-react"
 import { Toaster, toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -33,6 +33,24 @@ import {
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  downloadCountCSV,
+  downloadCountXLSX,
+  downloadCompareCSV,
+  downloadCompareXLSX,
+  printCountPDF,
+  printComparePDF,
+  shareCount,
+  shareCompare,
+  type ShareOutcome,
+} from "@/lib/export"
+import { decodeBarcodeFromImage } from "@/lib/barcode-image"
 
 interface InventoryItem {
   barcode: string
@@ -80,11 +98,13 @@ function InventoryCounterContent() {
   const [qtyDialogOpen, setQtyDialogOpen] = useState(false)
   const [pendingBarcode, setPendingBarcode] = useState<string | null>(null)
   const [dialogQty, setDialogQty] = useState("1")
+  const [photoBusy, setPhotoBusy] = useState(false)
 
   const barcodeInputRef = useRef<HTMLInputElement>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const stockFileInputRef = useRef<HTMLInputElement>(null)
+  const photoInputRef = useRef<HTMLInputElement>(null)
   const scannerRef = useRef<HTMLDivElement>(null)
   const html5QrScannerRef = useRef<Html5QrcodeType>(null)
   const addBarcodeRef = useRef<((barcode: string, qty: number) => void) | null>(null)
@@ -364,10 +384,10 @@ function InventoryCounterContent() {
 
     const initScanner = async () => {
       // Dynamic import to avoid SSR issues
-      const { Html5Qrcode } = await import("html5-qrcode")
-      
+      const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("html5-qrcode")
+
       if (cancelled || !scannerRef.current) return
-      
+
       // Create a container div for the scanner
       const scannerId = "barcode-scanner-view"
       let scannerEl = document.getElementById(scannerId)
@@ -377,7 +397,24 @@ function InventoryCounterContent() {
         scannerRef.current.appendChild(scannerEl)
       }
 
-      const html5QrCode = new Html5Qrcode(scannerId)
+      const html5QrCode = new Html5Qrcode(scannerId, {
+        verbose: false,
+        // Telefonlarda çok daha isabetli olan yerleşik dekoderi kullan
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.CODE_93,
+          Html5QrcodeSupportedFormats.ITF,
+          Html5QrcodeSupportedFormats.CODABAR,
+          Html5QrcodeSupportedFormats.QR_CODE,
+          Html5QrcodeSupportedFormats.DATA_MATRIX,
+        ],
+      })
       scannerInstance = html5QrCode
       html5QrScannerRef.current = html5QrCode
 
@@ -385,8 +422,18 @@ function InventoryCounterContent() {
         await html5QrCode.start(
           { facingMode: "environment" },
           {
-            fps: 10,
-            qrbox: { width: 250, height: 150 },
+            fps: 15,
+            // Tarama alanını görüntüye göre geniş tut: uzaktan da yakalar
+            qrbox: (viewfinderWidth: number, viewfinderHeight: number) => ({
+              width: Math.floor(viewfinderWidth * 0.85),
+              height: Math.floor(viewfinderHeight * 0.5),
+            }),
+            // Kamerayı yüksek çözünürlükte aç: küçük/uzak barkodlar da okunur
+            videoConstraints: {
+              facingMode: "environment",
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
+            },
           },
           (decodedText: string) => {
             const code = decodedText.trim()
@@ -403,9 +450,10 @@ function InventoryCounterContent() {
                 addBarcodeRef.current(code, quickQtyRef.current)
               }
             } else {
-              // Normal mode: close camera and ask for the quantity in the popup
+              // Normal mode: close camera and ask for the quantity in the popup.
+              // stop/clear is handled by the effect cleanup; calling stop here
+              // as well caused a crash on phones (clear while stopping).
               lastCamScanRef.current = { code, time: now }
-              html5QrCode.stop().catch(() => {})
               setCameraOpen(false)
               if (openQtyDialogRef.current) {
                 openQtyDialogRef.current(code)
@@ -426,8 +474,25 @@ function InventoryCounterContent() {
     return () => {
       cancelled = true
       if (scannerInstance) {
-        scannerInstance.stop().catch(() => {})
-        scannerInstance.clear()
+        const instance = scannerInstance
+        const clearSafely = () => {
+          try {
+            instance.clear()
+          } catch {
+            // ignore
+          }
+        }
+        // clear() must wait for stop() to finish, otherwise html5-qrcode
+        // throws "cannot clear while scan is ongoing" and crashes the page.
+        // stop() itself throws synchronously if the camera never started.
+        try {
+          instance.stop().catch(() => {}).finally(clearSafely)
+        } catch {
+          clearSafely()
+        }
+        if (html5QrScannerRef.current === instance) {
+          html5QrScannerRef.current = null
+        }
       }
     }
   }, [cameraOpen])
@@ -450,6 +515,40 @@ function InventoryCounterContent() {
     setBarcodeInput("")
     barcodeInputRef.current?.focus()
   }, [barcodeInput, quickMode, quickQty, addBarcodeToList, openQtyDialog])
+
+  // Scan a barcode from a photo (gallery or phone camera shot).
+  // Never throws: shows a toast when nothing readable is found.
+  const handlePhotoSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ""
+    if (!file) return
+
+    setPhotoBusy(true)
+    const toastId = toast.loading("Fotoğraf taranıyor...")
+    try {
+      const code = await decodeBarcodeFromImage(file)
+      toast.dismiss(toastId)
+      if (code) {
+        if (quickModeRef.current) {
+          addBarcodeToList(code, quickQtyRef.current)
+        } else {
+          openQtyDialog(code)
+        }
+      } else {
+        toast.error("Fotoğrafta barkod bulunamadı", {
+          description:
+            "Barkodu daha yakından, net ve düz (paralel) çekip tekrar deneyin.",
+        })
+      }
+    } catch {
+      toast.dismiss(toastId)
+      toast.error("Fotoğraf okunamadı", {
+        description: "Dosya açılamadı veya desteklenmiyor.",
+      })
+    } finally {
+      setPhotoBusy(false)
+    }
+  }
 
   // Close camera and cleanup
   const closeCamera = useCallback(async () => {
@@ -605,102 +704,89 @@ function InventoryCounterContent() {
     URL.revokeObjectURL(url)
   }
 
-  // Export to Excel (XLS format with proper column separation)
-  const exportToExcel = () => {
-    const xmlHeader = `<?xml version="1.0" encoding="UTF-8"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
-  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
-  <Worksheet ss:Name="Stok Sayım">
-    <Table>
-      <Column ss:Width="150"/>
-      <Column ss:Width="80"/>
-      <Row>
-        <Cell><Data ss:Type="String">Barkod</Data></Cell>
-        <Cell><Data ss:Type="String">Adet</Data></Cell>
-      </Row>`
-    
-    const xmlRows = items.map(item => `
-      <Row>
-        <Cell><Data ss:Type="String">${item.barcode}</Data></Cell>
-        <Cell><Data ss:Type="Number">${item.quantity}</Data></Cell>
-      </Row>`).join("")
-    
-    const xmlFooter = `
-    </Table>
-  </Worksheet>
-</Workbook>`
-    
-    const xml = xmlHeader + xmlRows + xmlFooter
-    
-    const blob = new Blob([xml], { type: "application/vnd.ms-excel;charset=utf-8;" })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.href = url
-    link.download = `stok_sayim_${new Date().toISOString().split("T")[0]}.xls`
-    link.click()
-    URL.revokeObjectURL(url)
+  // --- Dışa aktarma ve paylaşma -------------------------------------------
+  const activeSessionName =
+    sessions.find(s => s.id === activeSessionId)?.name ?? "Sayım"
+
+  const handleExportCountXLSX = async () => {
+    try {
+      await downloadCountXLSX(items, activeSessionName)
+      toast.success("Excel (.xlsx) dosyası indirildi")
+    } catch {
+      toast.error("Excel dosyası oluşturulamadı")
+    }
   }
 
-  // Export comparison to Excel
-  const exportComparisonToExcel = () => {
-    const comparison = getComparisonResults()
-    
-    const xmlHeader = `<?xml version="1.0" encoding="UTF-8"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
-  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
-  <Styles>
-    <Style ss:ID="match"><Interior ss:Color="#22c55e" ss:Pattern="Solid"/></Style>
-    <Style ss:ID="diff"><Interior ss:Color="#f59e0b" ss:Pattern="Solid"/></Style>
-    <Style ss:ID="onlyStock"><Interior ss:Color="#ef4444" ss:Pattern="Solid"/></Style>
-    <Style ss:ID="onlyCount"><Interior ss:Color="#3b82f6" ss:Pattern="Solid"/></Style>
-  </Styles>
-  <Worksheet ss:Name="Karşılaştırma">
-    <Table>
-      <Column ss:Width="150"/>
-      <Column ss:Width="80"/>
-      <Column ss:Width="80"/>
-      <Column ss:Width="80"/>
-      <Column ss:Width="100"/>
-      <Row>
-        <Cell><Data ss:Type="String">Barkod</Data></Cell>
-        <Cell><Data ss:Type="String">Stok</Data></Cell>
-        <Cell><Data ss:Type="String">Sayım</Data></Cell>
-        <Cell><Data ss:Type="String">Fark</Data></Cell>
-        <Cell><Data ss:Type="String">Durum</Data></Cell>
-      </Row>`
-    
-    const statusText = {
-      "match": "Eşit",
-      "difference": "Farklı",
-      "only-stock": "Sadece Stok",
-      "only-count": "Sadece Sayım"
+  const handleExportCountCSV = () => {
+    try {
+      downloadCountCSV(items, activeSessionName)
+      toast.success("CSV dosyası indirildi")
+    } catch {
+      toast.error("CSV dosyası oluşturulamadı")
     }
-    
-    const xmlRows = comparison.map(item => `
-      <Row ss:StyleID="${item.status === "match" ? "match" : item.status === "difference" ? "diff" : item.status === "only-stock" ? "onlyStock" : "onlyCount"}">
-        <Cell><Data ss:Type="String">${item.barcode}</Data></Cell>
-        <Cell><Data ss:Type="Number">${item.stockQty}</Data></Cell>
-        <Cell><Data ss:Type="Number">${item.countQty}</Data></Cell>
-        <Cell><Data ss:Type="Number">${item.countQty - item.stockQty}</Data></Cell>
-        <Cell><Data ss:Type="String">${statusText[item.status]}</Data></Cell>
-      </Row>`).join("")
-    
-    const xmlFooter = `
-    </Table>
-  </Worksheet>
-</Workbook>`
-    
-    const xml = xmlHeader + xmlRows + xmlFooter
-    
-    const blob = new Blob([xml], { type: "application/vnd.ms-excel;charset=utf-8;" })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.href = url
-    link.download = `stok_karsilastirma_${new Date().toISOString().split("T")[0]}.xls`
-    link.click()
-    URL.revokeObjectURL(url)
+  }
+
+  const handleExportCountPDF = () => {
+    if (!printCountPDF(items, activeSessionName)) {
+      toast.error("PDF penceresi açılamadı", {
+        description: "Tarayıcınız açılır pencereyi engellemiş olabilir.",
+      })
+    }
+  }
+
+  const notifyShareOutcome = (outcome: ShareOutcome) => {
+    switch (outcome) {
+      case "file":
+        toast.success("Sayım dosya olarak paylaşıldı")
+        break
+      case "text":
+        toast.success("Sayım metin olarak paylaşıldı")
+        break
+      case "clipboard":
+        toast.success("Paylaşım desteklenmiyor — liste panoya kopyalandı", {
+          description: "İstediğiniz uygulamaya yapıştırabilirsiniz.",
+        })
+        break
+      case "cancelled":
+        break
+      case "none":
+        toast.error("Paylaşım yapılamadı")
+        break
+    }
+  }
+
+  const handleShareCount = async () => {
+    notifyShareOutcome(await shareCount(items, activeSessionName))
+  }
+
+  const handleExportCompareXLSX = async () => {
+    try {
+      await downloadCompareXLSX(getComparisonResults(), activeSessionName)
+      toast.success("Excel (.xlsx) dosyası indirildi")
+    } catch {
+      toast.error("Excel dosyası oluşturulamadı")
+    }
+  }
+
+  const handleExportCompareCSV = () => {
+    try {
+      downloadCompareCSV(getComparisonResults(), activeSessionName)
+      toast.success("CSV dosyası indirildi")
+    } catch {
+      toast.error("CSV dosyası oluşturulamadı")
+    }
+  }
+
+  const handleExportComparePDF = () => {
+    if (!printComparePDF(getComparisonResults(), activeSessionName)) {
+      toast.error("PDF penceresi açılamadı", {
+        description: "Tarayıcınız açılır pencereyi engellemiş olabilir.",
+      })
+    }
+  }
+
+  const handleShareCompare = async () => {
+    notifyShareOutcome(await shareCompare(getComparisonResults(), activeSessionName))
   }
 
   // Parse CSV file helper
@@ -1052,6 +1138,23 @@ function InventoryCounterContent() {
                   >
                     <Camera className="h-5 w-5" />
                   </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-12 px-3 bg-transparent"
+                    onClick={() => photoInputRef.current?.click()}
+                    disabled={photoBusy}
+                    title="Fotoğraftan Okut (galeri veya çekim)"
+                  >
+                    <ImageUp className="h-5 w-5" />
+                  </Button>
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePhotoSelected}
+                    className="hidden"
+                  />
                 </div>
               </div>
               <div className="flex items-end">
@@ -1313,9 +1416,32 @@ function InventoryCounterContent() {
               </Card>
               
               <div className="flex gap-2 flex-wrap">
-                <Button variant="outline" onClick={exportToExcel} disabled={items.length === 0}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Excel İndir
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" disabled={items.length === 0}>
+                      <Download className="h-4 w-4 mr-2" />
+                      Dışa Aktar
+                      <ChevronDown className="h-4 w-4 ml-1.5 opacity-60" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    <DropdownMenuItem onClick={handleExportCountXLSX}>
+                      <FileSpreadsheet className="text-green-600" />
+                      Excel (.xlsx)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleExportCountCSV}>
+                      <FileText className="text-blue-600" />
+                      CSV (.csv)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleExportCountPDF}>
+                      <Printer className="text-red-600" />
+                      PDF / Yazdır
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Button variant="outline" onClick={handleShareCount} disabled={items.length === 0}>
+                  <Share2 className="h-4 w-4 mr-2" />
+                  Paylaş
                 </Button>
                 <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
                   <Upload className="h-4 w-4 mr-2" />
@@ -1552,10 +1678,33 @@ function InventoryCounterContent() {
 
             {/* Export Comparison */}
             {stockItems.length > 0 && items.length > 0 && (
-              <div className="mb-6">
-                <Button variant="outline" onClick={exportComparisonToExcel}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Karşılaştırma Excel İndir
+              <div className="mb-6 flex gap-2 flex-wrap">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline">
+                      <Download className="h-4 w-4 mr-2" />
+                      Karşılaştırmayı Dışa Aktar
+                      <ChevronDown className="h-4 w-4 ml-1.5 opacity-60" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    <DropdownMenuItem onClick={handleExportCompareXLSX}>
+                      <FileSpreadsheet className="text-green-600" />
+                      Excel (.xlsx)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleExportCompareCSV}>
+                      <FileText className="text-blue-600" />
+                      CSV (.csv)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleExportComparePDF}>
+                      <Printer className="text-red-600" />
+                      PDF / Yazdır
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Button variant="outline" onClick={handleShareCompare}>
+                  <Share2 className="h-4 w-4 mr-2" />
+                  Paylaş
                 </Button>
               </div>
             )}
