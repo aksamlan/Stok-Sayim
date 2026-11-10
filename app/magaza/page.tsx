@@ -273,7 +273,7 @@ export default function MagazaPage() {
                   <CardContent>
                     <form onSubmit={handleJoin} className="space-y-3">
                       <div className="space-y-1">
-                        <label className="text-xs font-medium text-muted-foreground">
+                        <label className="block text-xs font-medium text-muted-foreground">
                           Mağaza Kodu
                         </label>
                         <Input
@@ -287,7 +287,7 @@ export default function MagazaPage() {
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-xs font-medium text-muted-foreground">
+                        <label className="block text-xs font-medium text-muted-foreground">
                           Şifre
                         </label>
                         <Input
@@ -300,7 +300,7 @@ export default function MagazaPage() {
                       </div>
                       <div className="grid grid-cols-[1fr_auto] gap-2">
                         <div className="space-y-1">
-                          <label className="text-xs font-medium text-muted-foreground">
+                          <label className="block text-xs font-medium text-muted-foreground">
                             Adın (sayımcılar için)
                           </label>
                           <Input
@@ -312,7 +312,7 @@ export default function MagazaPage() {
                           />
                         </div>
                         <div className="space-y-1">
-                          <label className="text-xs font-medium text-muted-foreground">
+                          <label className="block text-xs font-medium text-muted-foreground">
                             PIN
                           </label>
                           <Input
@@ -351,7 +351,7 @@ export default function MagazaPage() {
                   <CardContent>
                     <form onSubmit={handleCreate} className="space-y-3">
                       <div className="space-y-1">
-                        <label className="text-xs font-medium text-muted-foreground">
+                        <label className="block text-xs font-medium text-muted-foreground">
                           Mağaza Adı
                         </label>
                         <Input
@@ -364,7 +364,7 @@ export default function MagazaPage() {
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div className="space-y-1">
-                          <label className="text-xs font-medium text-muted-foreground">
+                          <label className="block text-xs font-medium text-muted-foreground">
                             E-posta
                           </label>
                           <Input
@@ -385,7 +385,7 @@ export default function MagazaPage() {
                           />
                         </div>
                         <div className="space-y-1">
-                          <label className="text-xs font-medium text-muted-foreground">
+                          <label className="block text-xs font-medium text-muted-foreground">
                             Telefon
                           </label>
                           <Input
@@ -404,7 +404,7 @@ export default function MagazaPage() {
                         </p>
                       </div>
                       <div className="space-y-1">
-                        <label className="text-xs font-medium text-muted-foreground">
+                        <label className="block text-xs font-medium text-muted-foreground">
                           Sayım Şifresi
                         </label>
                         <Input
@@ -418,7 +418,7 @@ export default function MagazaPage() {
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div className="space-y-1">
-                          <label className="text-xs font-medium text-muted-foreground">
+                          <label className="block text-xs font-medium text-muted-foreground">
                             Yönetici Şifresi
                           </label>
                           <Input
@@ -431,7 +431,7 @@ export default function MagazaPage() {
                           />
                         </div>
                         <div className="space-y-1">
-                          <label className="text-xs font-medium text-muted-foreground">
+                          <label className="block text-xs font-medium text-muted-foreground">
                             Tekrar
                           </label>
                           <Input
@@ -446,7 +446,7 @@ export default function MagazaPage() {
                       </div>
                       {verifyToken !== null && (
                         <div className="space-y-1 rounded-lg border border-primary/30 bg-primary/5 p-3">
-                          <label className="text-xs font-medium text-muted-foreground">
+                          <label className="block text-xs font-medium text-muted-foreground">
                             E-postana gelen 6 haneli doğrulama kodu
                           </label>
                           <Input
