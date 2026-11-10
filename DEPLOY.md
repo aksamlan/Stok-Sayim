@@ -106,6 +106,10 @@ ya da 0 yapıp kapatabilirsin.
    sudo ufw deny 80/tcp; sudo ufw deny 443/tcp   # kural sırası: önce izinler
    ```
 
+   Not: Alan adının AAAA (IPv6) kaydı varsa IPv6 aralıklarını da ekle
+   (`curl -s https://www.cloudflare.com/ips-v6`) ya da AAAA kaydını kaldır;
+   yoksa Cloudflare'in IPv6 uçları engellenir ve aralıklı 522 görürsün.
+
 > **ÖNEMLİ — Cloudflare önbellek uyarısı:** Cloudflare'de "Cache Everything"
 > kuralı AÇMA. Açarsan `/api/*` yanıtları (yetkili veriler!) uçta önbelleğe
 > alınıp kullanıcılar arasında sızabilir. Uygulama `/api/*` için `no-store`

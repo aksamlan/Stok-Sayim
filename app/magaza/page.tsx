@@ -370,7 +370,15 @@ export default function MagazaPage() {
                           <Input
                             type="email"
                             value={newEmail}
-                            onChange={(e) => setNewEmail(e.target.value)}
+                            onChange={(e) => {
+                              setNewEmail(e.target.value)
+                              // E-posta değişti: eski doğrulama jetonu artık o
+                              // adrese ait değil, kod adımını sıfırla
+                              if (verifyToken !== null) {
+                                setVerifyToken(null)
+                                setVerifyCode("")
+                              }
+                            }}
                             placeholder="ornek@eposta.com"
                             className="h-11"
                             required

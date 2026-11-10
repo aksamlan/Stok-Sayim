@@ -405,7 +405,7 @@ export default function YonetimPage() {
                   inputMode="numeric"
                 />
                 <span className="text-sm text-muted-foreground">
-                  gün sonra silinir (0 = kapalı; silinmeden 7 gün önce e-posta uyarısı)
+                  gün sonra silinir (0 = kapalı, en az 8; silinmeden 7 gün önce e-posta uyarısı)
                 </span>
                 <Button
                   size="sm"

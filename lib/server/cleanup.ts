@@ -22,8 +22,10 @@ export function getRetentionDays(db: DatabaseSync): number {
 }
 
 export function setRetentionDays(db: DatabaseSync, days: number): void {
-  if (!Number.isInteger(days) || days < 0 || days > 3650) {
-    throw new ApiError(400, "Silme süresi 0-3650 gün arası olmalı (0 = kapalı)")
+  // 1-7 gün yasak: uyarı penceresi 7 gün olduğundan daha kısa süre, AKTİF
+  // mağazalara bile sürekli "silinecek" maili yağdırırdı.
+  if (!Number.isInteger(days) || days < 0 || days > 3650 || (days > 0 && days < 8)) {
+    throw new ApiError(400, "Silme süresi 0 (kapalı) ya da 8-3650 gün olmalı")
   }
   setMeta(db, "retention_days", String(days))
 }
@@ -74,6 +76,9 @@ export async function runCleanup(
       warnedInPeriod &&
       now - (row.cleanup_warned_at as number) >= WARN_BEFORE_DAYS * DAY
     ) {
+      // Önce sil, sonra haber ver: silme başarısız olursa "silindi" maili gitmez.
+      deleteStore(db, row.id)
+      deleted++
       await mail(
         row.email,
         `Stokzen: "${row.name}" mağazası silindi`,
@@ -81,8 +86,6 @@ export async function runCleanup(
           `tüm verileriyle birlikte otomatik olarak silindi.\n\n` +
           `Tekrar kullanmak istersen yeni bir mağaza kurman yeterli.`
       )
-      deleteStore(db, row.id)
-      deleted++
     } else if (idleMs > warnThreshold && !warnedInPeriod) {
       await mail(
         row.email,

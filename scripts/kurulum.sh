@@ -154,12 +154,17 @@ CADDYEOF
   env_ayarla STOK_BIND_ARGS "-H 127.0.0.1"
   echo
   read -r -p "Cloudflare proxy (turuncu bulut) kullanacak mısın? [e/H]: " cfyn
-  if [ "${cfyn:-H}" = "e" ] || [ "${cfyn:-H}" = "E" ]; then
-    # Hız limiti gerçek ziyaretçi IP'sini CF-Connecting-IP'den okur.
-    # Güvenli olması için 80/443'ü yalnız Cloudflare IP aralıklarına açman önerilir (DEPLOY.md).
-    env_ayarla TRUST_CF_HEADER "1"
-    echo "Cloudflare gerçek-IP desteği açıldı (TRUST_CF_HEADER=1)."
-  fi
+  case "${cfyn:-H}" in
+    e|E|evet|EVET|Evet)
+      env_ayarla TRUST_CF_HEADER "1"
+      echo "Cloudflare gerçek-IP desteği açıldı (TRUST_CF_HEADER=1)."
+      echo
+      echo "  ⚠ ÖNEMLİ: Bu ayar güvenli olsun diye 80/443 portlarını YALNIZ"
+      echo "  Cloudflare IP aralıklarına açmalısın; yoksa sunucuya doğrudan"
+      echo "  bağlanan biri sahte IP başlığıyla hız limitini aşabilir."
+      echo "  Komutlar DEPLOY.md bölüm 4'te (cloudflare.com/ips)."
+      ;;
+  esac
   if [ -f "/etc/systemd/system/$SERVICE.service" ]; then
     zorunlu systemctl restart "$SERVICE" || return 1
     sleep 2

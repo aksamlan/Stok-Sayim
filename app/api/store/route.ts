@@ -2,7 +2,7 @@ import { ApiError } from "@/lib/server/auth"
 import { getDb } from "@/lib/server/db"
 import { handle, json, readBody } from "@/lib/server/http"
 import { mailConfigured, sendMail } from "@/lib/server/mail"
-import { normalizePhone, verifyEmailCode } from "@/lib/server/verify"
+import { consumeEmailCode, normalizePhone } from "@/lib/server/verify"
 import { rateLimitOrThrow } from "@/lib/server/ratelimit"
 import { createStore, joinStore } from "@/lib/server/stores"
 
@@ -26,12 +26,16 @@ export const POST = handle(async (req) => {
   if (!phone) throw new ApiError(400, "Geçerli bir telefon numarası gir (örn. 0555 111 22 33)")
   let emailVerified = false
   if (mailConfigured()) {
+    // consumeEmailCode TEK KULLANIMLIKTIR: aynı kod ikinci mağaza açamaz.
     if (
       !body.verifyToken ||
       !body.verifyCode ||
-      !verifyEmailCode(db, body.verifyToken, email, body.verifyCode)
+      !consumeEmailCode(db, body.verifyToken, email, body.verifyCode)
     ) {
-      throw new ApiError(400, "E-posta doğrulama kodu hatalı ya da süresi dolmuş")
+      throw new ApiError(
+        400,
+        "E-posta doğrulama kodu hatalı, süresi dolmuş ya da zaten kullanılmış"
+      )
     }
     emailVerified = true
   }
@@ -52,7 +56,7 @@ export const POST = handle(async (req) => {
   const joined = joinStore(db, code, body.adminPassword, "", "")
   // Hoş geldin maili (SMTP ayarlıysa); başarısızlık kurulumu etkilemez.
   void sendMail(
-    body.email?.trim() || null,
+    email,
     `Stokzen: "${joined.storeName}" mağazan hazır`,
     `Mağazan kuruldu!\n\nMağaza kodu: ${code}\n\nSayımcılar bu kod + sayım ` +
       `şifresiyle, sen yönetici şifresiyle girersin. Kodu ve şifreleri güvenli ` +

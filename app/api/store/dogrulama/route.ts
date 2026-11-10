@@ -2,7 +2,7 @@ import { ApiError } from "@/lib/server/auth"
 import { getDb } from "@/lib/server/db"
 import { handle, json, readBody } from "@/lib/server/http"
 import { mailConfigured, sendMail } from "@/lib/server/mail"
-import { rateLimitOrThrow } from "@/lib/server/ratelimit"
+import { checkRateLimit, rateLimitOrThrow } from "@/lib/server/ratelimit"
 import { createEmailCode } from "@/lib/server/verify"
 
 // Mağaza kurulumunun 1. adımı: e-postaya 6 haneli doğrulama kodu gönderir.
@@ -13,6 +13,11 @@ export const POST = handle(async (req) => {
   const email = (body.email ?? "").trim()
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw new ApiError(400, "Geçerli bir e-posta adresi gir")
+  }
+  // Alıcı başına da sınır: bir kurbanın posta kutusu kod yağmuruna tutulamaz
+  // (IP başına limiti aşsan bile aynı adrese 15 dakikada en çok 3 kod gider).
+  if (!checkRateLimit(`verify-mail-to:${email.toLowerCase()}`, 3, 15 * 60000)) {
+    throw new ApiError(429, "Bu adrese kısa süre önce kod gönderildi, biraz bekle")
   }
   if (!mailConfigured()) {
     return json({ required: false })

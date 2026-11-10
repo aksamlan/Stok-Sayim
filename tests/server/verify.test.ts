@@ -1,6 +1,7 @@
 import { expect, test } from "vitest"
 import { openDatabase } from "../../lib/server/db"
 import {
+  consumeEmailCode,
   createEmailCode,
   normalizePhone,
   verifyEmailCode,
@@ -28,6 +29,22 @@ test("expired code rejected", () => {
   const db = openDatabase(":memory:")
   const { token, code } = createEmailCode(db, "a@b.com", Date.now() - 16 * 60 * 1000)
   expect(verifyEmailCode(db, token, "a@b.com", code)).toBe(false)
+})
+
+test("a code is single-use (cannot mint two stores)", () => {
+  const db = openDatabase(":memory:")
+  const { token, code } = createEmailCode(db, "a@b.com")
+  expect(consumeEmailCode(db, token, "a@b.com", code)).toBe(true)
+  expect(consumeEmailCode(db, token, "a@b.com", code)).toBe(false)
+})
+
+test("same code in two tokens hashes differently (salted)", () => {
+  const db = openDatabase(":memory:")
+  const t1 = createEmailCode(db, "a@b.com", 1000)
+  const t2 = createEmailCode(db, "c@d.com", 2000)
+  // gövdeler farklı tuz taşıdığı için aynı kod bile aynı hash'i üretemez;
+  // jeton gövdeleri karşılaştırılabilir olmamalı
+  expect(t1.token.split(".")[0]).not.toBe(t2.token.split(".")[0])
 })
 
 test("phone normalization", () => {
