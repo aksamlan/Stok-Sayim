@@ -204,3 +204,32 @@
 - DEPLOY.md (Türkçe, adım adım, kopyala-yapıştır komutlarla): 1) sunucuya SSH; 2) gizli repo için deploy key üretme (`ssh-keygen`), GitHub repo Settings → Deploy keys'e ekleme, `git clone git@github.com:...`; 3) `sudo bash scripts/kurulum.sh alan.adi.com`; 4) Cloudflare'de A kaydı (sunucu IP, proxy açık) + SSL/TLS "Full (strict)" notu + Caddy'nin otomatik sertifika alması; alan adı yoksa `http://sunucu-ip:3000` ile kullanım; 5) güncelleme `bash scripts/guncelle.sh`; 6) yedekleme = `data/` klasörünü kopyala (cron örneği); 7) servis komutları (status/logs: `journalctl -u stok-sayim -f`); 8) Docker alternatifi; 9) "7 GB / 4 CPU yeter mi" → evet notu.
 
 - [ ] Step 1: Write all files (`bash -n` ile sözdizimi kontrolü). Step 2: `pnpm build` + `pnpm test` + tsc son kontrol. Step 3: Commit `feat: ubuntu kurulum scriptleri + DEPLOY.md (Cloudflare, guncelleme)` + push.
+
+### Task 14: Stokzen markalaması
+
+**Files:**
+- Create: `components/stokzen.tsx`
+- Modify: `app/layout.tsx` (metadata title "Stokzen Stok Sayım", description), `app/page.tsx` (header adı "Stokzen Stok Sayım" kısa: "Stokzen", footer), mağaza sayfaları footer.
+
+**Interfaces:**
+- `components/stokzen.tsx` exports: `StokzenLogo({ className })` (inline SVG word+mark, currentColor) ve `PoweredByStokzen()` — `<footer>` ortalanmış, `text-xs text-muted-foreground`, logo + "Powered by Stokzen" linki `https://stokzen.com` (`target="_blank" rel="noopener"`).
+- Her sayfanın (ana, /magaza, /magaza/sayim, /magaza/panel, /yonetim) altına `<PoweredByStokzen />`.
+
+- [ ] Step 1: Implement + tüm sayfalara footer. Step 2: tsc + build. Step 3: Commit `feat: stokzen markalamasi (logo, powered by, metadata)`.
+
+### Task 15: Süper yönetim paneli (/yonetim) + güvenlik sertleştirme
+
+**Files:**
+- Create: `lib/server/superadmin.ts`, `lib/server/ratelimit.ts`, `tests/server/superadmin.test.ts`, `app/api/yonetim/login/route.ts`, `app/api/yonetim/overview/route.ts`, `app/api/yonetim/store/route.ts`, `app/yonetim/page.tsx`, `scripts/yonetici-sifre.mjs`
+- Modify: `lib/server/auth.ts` (TokenPayload.role `"counter" | "admin" | "super"`; requireAuth role param `"admin" | "super"`; super yalnız super token), `app/api/store/join/route.ts` + `app/api/store/route.ts` (rate limit uygula)
+
+**Interfaces:**
+- `ratelimit.ts`: `checkRateLimit(key: string, limit: number, windowMs: number): boolean` (bellek içi Map, pencere başına sayaç; aşılırsa false) + `rateLimitOrThrow(req, name, limit=10, windowMs=60000)` — anahtar `name + ip` (`x-forwarded-for` ilk değer veya "local"), aşımda ApiError 429 "Çok fazla deneme, biraz bekle".
+- `superadmin.ts`: `setSuperPassword(db, pw)` (meta `sa_pw_hash`); `superLogin(db, pw): { token }` (hash yoksa ApiError 503 "Yönetici şifresi henüz belirlenmemiş (sunucuda scripts/yonetici-sifre.mjs çalıştır)"; yanlışsa 401); `overview(db): { stores: { id, code, name, createdAt, catalogCount, sessionCount, counterCount, eventCount, totalQty, lastActivity: number|null }[], recent: { storeName, counter, qty, at }[] }` (recent: son 50 olay, barkod gösterilmez); `resetStorePassword(db, storeId, which: "count"|"admin", newPw)`; `deleteStore(db, storeId)` (stores+sessions+products+scan_events sil, tek transaction).
+- HTTP: `POST /api/yonetim/login {password}` (rate limit 5/dk) → `{token}` (role "super", exp 1 gün); `GET /api/yonetim/overview` (super) → overview; `PATCH /api/yonetim/store {storeId, which, newPassword}` (super); `DELETE /api/yonetim/store?id=` (super).
+- `scripts/yonetici-sifre.mjs`: `node scripts/yonetici-sifre.mjs <yeni-şifre>` — DATA_DIR'deki DB'ye doğrudan scrypt hash yazar (lib'leri import etmeden kendi içinde, node:sqlite + node:crypto); çıktı Türkçe.
+- `/yonetim` sayfası: login kartı → panel: özet çipler (mağaza sayısı, toplam okutma), mağaza tablosu (yukarıdaki alanlar + işlemler: şifre sıfırla dialog, sil AlertDialog), son aktiviteler listesi, 10 sn polling. Token sessionStorage `yonetimToken`.
+- Güvenlik: join/create/login uçlarında rate limit; super token 24 saat; hata mesajları hangi alanın yanlış olduğunu söylemez.
+
+- [ ] Step 1: Failing tests: `test_super_login_unset_503`, `test_super_login_roundtrip`, `test_reset_store_password` (eski şifre artık 401, yenisi girer), `test_delete_store_cascades`, `test_rate_limit_blocks_11th`, `test_counter_token_rejected_for_super`.
+- [ ] Step 2: FAIL → implement → PASS + tsc. Step 3: Sayfa + script. Step 4: Commit `feat: stokzen yonetim paneli + hiz limiti`.
