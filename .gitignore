@@ -29,3 +29,7 @@ next-env.d.ts
 # SQLite verileri (sunucu)
 /data
 
+
+# Gelistirme ici gecici dosyalar
+/.superpowers
+
