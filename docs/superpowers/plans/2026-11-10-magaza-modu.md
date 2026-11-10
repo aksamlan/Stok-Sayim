@@ -78,7 +78,7 @@
 - Create: `lib/server/catalog.ts`, `tests/server/catalog.test.ts`, `app/api/catalog/route.ts`
 
 **Interfaces:**
-- Produces (lib): `type CatalogItem = { barcode: string; name: string; expected: number | null }`; `replaceCatalog(db, storeId, items: CatalogItem[]): { count, version }` (single transaction: DELETE store rows + prepared INSERT; bump catalog_version); `getCatalog(db, storeId, since?: number): { version: number; unchanged?: true; items?: CatalogItem[] }`; `catalogSize(db, storeId): number`
+- Produces (lib): `type CatalogItem = { barcode: string; name: string; category: string | null; expected: number | null }`; `replaceCatalog(db, storeId, items: CatalogItem[]): { count, version }` (single transaction: DELETE store rows + prepared INSERT; bump catalog_version); `getCatalog(db, storeId, since?: number): { version: number; unchanged?: true; items?: CatalogItem[] }`; `catalogSize(db, storeId): number`
 - Produces (HTTP): `PUT /api/catalog {items}` (admin) → `{count, version}`; `GET /api/catalog?since=N` (auth) → unchanged or full list.
 
 - [ ] Step 1: Failing tests: `test_replace_and_get`, `test_since_unchanged`, `test_catalog_turkish_names` (name `"Şeftali Yoğurt İçeceği ğüşı"` roundtrips byte-exact), `test_leading_zero_barcode` (`"0012345"` stays string), `test_bulk_20k_under_3s` (20k rows, assert elapsed < 3000ms).
@@ -90,7 +90,7 @@
 - Create: `lib/server/counts.ts`, `tests/server/counts.test.ts`, `app/api/scan/route.ts`, `app/api/my-counts/route.ts`, `app/api/dashboard/route.ts`, `app/api/dashboard/export/route.ts`
 
 **Interfaces:**
-- Produces (lib): `type ScanEvent = { id: string; sessionId: string; barcode: string; qty: number; createdAt: number }`; `recordEvents(db, storeId, counter: string, events: ScanEvent[]): { accepted: number }` (INSERT OR IGNORE, single transaction, validates session belongs to store & active); `myCounts(db, storeId, sessionId, counter): { barcode, qty }[]` (SUM>0 only); `dashboard(db, storeId, sessionId, opts: { filter: "problems" | "all"; search?: string; page: number; pageSize: number }): { totals: { totalQty, distinctCounted, counters, unknownCount, catalogCount }, byCounter: { counter, qty, distinct, lastAt }[], rows: { barcode, name: string|null, expected: number|null, counted: number, status: "match"|"difference"|"only-stock"|"only-count" }[], rowTotal: number }` — rows from `products FULL-equivalent LEFT JOIN both ways via UNION`, status computed in SQL/JS; "problems" filter = status != "match"; status "only-count" means unknown barcode (not in catalog).
+- Produces (lib): `type ScanEvent = { id: string; sessionId: string; barcode: string; qty: number; createdAt: number }`; `recordEvents(db, storeId, counter: string, events: ScanEvent[]): { accepted: number }` (INSERT OR IGNORE, single transaction, validates session belongs to store & active); `myCounts(db, storeId, sessionId, counter): { barcode, qty }[]` (SUM>0 only); `dashboard(db, storeId, sessionId, opts: { filter: "problems" | "all"; search?: string; category?: string; page: number; pageSize: number }): { totals: { totalQty, distinctCounted, counters, unknownCount, catalogCount }, byCounter: { counter, qty, distinct, lastAt }[], byCategory: { category: string|null, counted, expected, distinct }[], rows: { barcode, name: string|null, category: string|null, expected: number|null, counted: number, status: "match"|"difference"|"only-stock"|"only-count" }[], rowTotal: number }` — rows from `products FULL-equivalent LEFT JOIN both ways via UNION`, status computed in SQL/JS; "problems" filter = status != "match"; status "only-count" means unknown barcode (not in catalog).
 - Produces (HTTP): `POST /api/scan {sessionId, events}` (counter|admin) → `{accepted}`; `GET /api/my-counts?sessionId=` → `{items}`; `GET /api/dashboard?sessionId=&filter=&search=&page=` (admin) → dashboard result; `GET /api/dashboard/export?sessionId=&page=&pageSize=10000` (admin) → `{rows, rowTotal}` (filter "all").
 
 - [ ] Step 1: Failing tests: `test_recordEvents_idempotent` (same batch twice → totals unchanged, accepted 0 second time), `test_merge_two_counters_same_barcode` (3 + 4 → counted 7, byCounter has both), `test_negative_delta_delete` (5 then -5 → excluded from myCounts, counted 0 → status "only-stock"), `test_unknown_barcode_status_only_count`, `test_dashboard_problems_filter_and_search`, `test_closed_session_rejects_events` (ApiError 409), `test_pagination` (rowTotal vs rows.length).
@@ -128,7 +128,7 @@
 - Create: `lib/store-client/parse-catalog.ts`, `tests/client/parse-catalog.test.ts`
 
 **Interfaces:**
-- Produces: `sheetToRows(file: File): Promise<{ headers: string[]; rows: unknown[][] }>` (xlsx dynamic import, `{raw: true}`); `detectColumns(headers: string[]): { barcode: number; name: number; expected: number | -1 }` (match lowercased: barkod/barcode/kod → barcode; ad/ürün/urun/name/açıklama → name; stok/adet/miktar/expected/beklenen → expected); `buildCatalog(rows: unknown[][], cols): { items: CatalogItem[]; errors: string[] }` — barcode: string cells trimmed, number cells `String(v)` only if `Number.isSafeInteger(v)`, else row error `"satır N: barkod bilimsel gösterimde"`; skips empty barcode rows; dedupes (last wins).
+- Produces: `sheetToRows(file: File): Promise<{ headers: string[]; rows: unknown[][] }>` (xlsx dynamic import, `{raw: true}`); `detectColumns(headers: string[]): { barcode: number; name: number; category: number | -1; expected: number | -1 }` (match lowercased: barkod/barcode/kod → barcode; ad/ürün/urun/name/açıklama → name; kategori/category/grup/reyon/bölüm → category; stok/adet/miktar/expected/beklenen → expected); `buildCatalog(rows: unknown[][], cols): { items: CatalogItem[]; errors: string[] }` — barcode: string cells trimmed, number cells `String(v)` only if `Number.isSafeInteger(v)`, else row error `"satır N: barkod bilimsel gösterimde"`; skips empty barcode rows; dedupes (last wins).
 - `detectColumns`/`buildCatalog` are pure (testable in node); only `sheetToRows` touches File.
 
 - [ ] Step 1: Failing tests: `test_detect_turkish_headers` (`["Barkod","Ürün Adı","Stok"]`), `test_numeric_barcode_safe_integer` (8690123456789 → `"8690123456789"`), `test_scientific_rejected` (8.69e12 as non-safe-float → error row), `test_dedupe_last_wins`, `test_expected_optional`.
@@ -155,7 +155,7 @@
 **Interfaces:**
 - Consumes: offline.ts (ensureCatalog, enqueueScan, getMine, seedMine, startSync), CameraScanner, decodeBarcodeFromImage, session.ts, api.ts (myCounts for seed).
 - Behavior: guard → no auth → redirect `/magaza`. Header: storeName + counter + sync badge (`Çevrimdışı — N bekliyor` amber / `Senkron` green / `Oturum süresi doldu — tekrar gir` red link). Loads catalog with progress ("Katalog indiriliyor… %"), loads active session (`GET /api/sessions` → active; none → "Yönetici henüz sayım başlatmadı" empty state with refresh button; offline → last known sessionId from idb meta).
-- Scan input identical pattern to solo mode (autofocus, enter submits, camera + photo buttons, quick-mode toggle with qty chips). On submit: lookup Map → **product card flashes under input: name (or "⚠ Listede yok" amber) + new total**; qty dialog same as solo (1/5/10/20 + custom) in normal mode, instant add in quick mode. Every add → `enqueueScan` with uuid + updates own list state.
+- Scan input identical pattern to solo mode (autofocus, enter submits, camera + photo buttons, quick-mode toggle with qty chips). On submit: lookup Map → **product card flashes under input: name + kategori rozeti (or "⚠ Listede yok" amber) + new total**; qty dialog same as solo (1/5/10/20 + custom) in normal mode, instant add in quick mode. Every add → `enqueueScan` with uuid + updates own list state.
 - Own list table (solo table style): barcode, name from Map, qty, unknown badge, delete (→ negative delta event) — sorted last-scanned first, only own items, searchable.
 
 - [ ] Step 1: Implement. Step 2: tsc + build clean. Step 3: Commit `feat: cok kullanicili sayim ekrani (offline-first)`.
@@ -172,8 +172,9 @@
   2. CatalogUpload card: file input → sheetToRows → column dropdowns (auto-preselected) + first-3-rows preview → "Yükle (N ürün)" → PUT, progress state, errors listed (max 10 + "… ve X daha"); shows current `catalogCount` + version.
   3. Canlı özet: stat chips (toplam adet, sayılan farklı barkod / katalog, sayımcı sayısı, listede yok) — poll 5s while tab visible.
   4. Sayımcılar table: counter, qty, distinct, son okutma (relative time).
-  5. Karşılaştırma table: filter toggle (Sorunlular | Tümü), search input, paginated 100, status badges reusing solo-mode soft badge styles; "Listede yok" rows amber.
-  6. Dışa aktar dropdown (XLSX/CSV/PDF/Paylaş): loops `/api/dashboard/export` pages → map to `CompareRow[]` → existing export fns with sessionName.
+  5. Kategori kırılımı table (byCategory: kategori, sayılan, beklenen, fark) — shown only when catalog has categories.
+  6. Karşılaştırma table: filter toggle (Sorunlular | Tümü) + kategori dropdown filter, search input, paginated 100, status badges reusing solo-mode soft badge styles; "Listede yok" rows amber; kategori column when present.
+  7. Dışa aktar dropdown (XLSX/CSV/PDF/Paylaş): loops `/api/dashboard/export` pages → new export fns in lib/export.ts with columns Barkod, Ürün Adı, Kategori, Beklenen, Sayılan, Fark, Durum (store-mode variants; solo compare fns untouched).
 - [ ] Step 1: Implement. Step 2: tsc + build. Step 3: Commit `feat: canli yonetici panosu (yukleme, kirilim, karsilastirma, disa aktarma)`.
 
 ### Task 12: Service worker + end-to-end smoke
@@ -190,15 +191,16 @@
 - [ ] Step 2: `pnpm build` + `pnpm start` (port 3458) → browser smoke: create store → upload small CSV catalog (5 rows incl. Turkish name) → open counter in 2nd tab → scan known + unknown barcode → panel shows merged totals, unknown flagged, per-counter row → counter tab: DevTools offline → scan 2 more → back online → panel reflects them. Export XLSX toast OK.
 - [ ] Step 3: Fix whatever the smoke run surfaces; re-run until clean. Commit `feat: service worker + uctan uca dogrulama duzeltmeleri`.
 
-### Task 13: Deployment package
+### Task 13: Deployment package (Ubuntu + gizli repo + Cloudflare)
 
 **Files:**
-- Create: `Dockerfile`, `docker-compose.yml`, `.dockerignore`, `DEPLOY.md`
-- Modify: `README.md` (kısa Mağaza Modu bölümü + DEPLOY.md linki), `package.json` (`"start": "next start -p ${PORT:-3000}"` kalır; ekleme yok gerekmedikçe)
+- Create: `scripts/kurulum.sh`, `scripts/guncelle.sh`, `Dockerfile`, `docker-compose.yml`, `.dockerignore`, `DEPLOY.md`
+- Modify: `README.md` (kısa Mağaza Modu bölümü + DEPLOY.md linki)
 
 **Interfaces:**
-- Dockerfile: `FROM node:24-alpine`, corepack enable pnpm, `pnpm install --frozen-lockfile`, `pnpm build`, `ENV DATA_DIR=/app/data`, `VOLUME /app/data`, `EXPOSE 3000`, `CMD ["pnpm","start"]`.
-- docker-compose: service `stok`, `ports: "3000:3000"`, volume `./data:/app/data`, `restart: unless-stopped`.
-- DEPLOY.md (Türkçe): A) Docker yolu (compose up -d, güncelleme, yedekleme = `data/` kopyala), B) Çıplak Node yolu (Node 24 kurulumu, pnpm, build, systemd unit örneği), C) Nginx reverse proxy + HTTPS (certbot) örneği, D) "7 GB / 4 CPU yeter mi" notu (evet; 100k katalog + 10 sayımcı için bolca).
+- `scripts/kurulum.sh` (Ubuntu, root/sudo, idempotent): apt update; NodeSource Node 24; corepack pnpm; `pnpm install --frozen-lockfile`; `pnpm build`; `data/` oluştur; systemd unit `stok-sayim.service` yaz+enable+start (User=mevcut kullanıcı, WorkingDirectory=repo, `Environment=DATA_DIR=.../data PORT=3000`, ExecStart=`pnpm start`, Restart=always); Caddy kur (apt, resmi repo) ve alan adı parametresi verildiyse `Caddyfile` yazıp reload (`alan.com { reverse_proxy localhost:3000 }`); her adımda `echo "[adım] ..."` ilerleme çıktısı; alan adı `./scripts/kurulum.sh stok.example.com` argümanıyla.
+- `scripts/guncelle.sh`: `git pull --ff-only` + `pnpm install --frozen-lockfile` + `pnpm build` + `sudo systemctl restart stok-sayim` + durum çıktısı.
+- Dockerfile: `FROM node:24-alpine`, corepack pnpm, install+build, `ENV DATA_DIR=/app/data`, `VOLUME /app/data`, `EXPOSE 3000`, `CMD ["pnpm","start"]`; compose: port 3000, `./data:/app/data`, `restart: unless-stopped`.
+- DEPLOY.md (Türkçe, adım adım, kopyala-yapıştır komutlarla): 1) sunucuya SSH; 2) gizli repo için deploy key üretme (`ssh-keygen`), GitHub repo Settings → Deploy keys'e ekleme, `git clone git@github.com:...`; 3) `sudo bash scripts/kurulum.sh alan.adi.com`; 4) Cloudflare'de A kaydı (sunucu IP, proxy açık) + SSL/TLS "Full (strict)" notu + Caddy'nin otomatik sertifika alması; alan adı yoksa `http://sunucu-ip:3000` ile kullanım; 5) güncelleme `bash scripts/guncelle.sh`; 6) yedekleme = `data/` klasörünü kopyala (cron örneği); 7) servis komutları (status/logs: `journalctl -u stok-sayim -f`); 8) Docker alternatifi; 9) "7 GB / 4 CPU yeter mi" → evet notu.
 
-- [ ] Step 1: Write all files. Step 2: `docker build` yerel Windows'ta Docker yoksa atla — `pnpm build` + `pnpm test` + tsc son kontrol. Step 3: Commit `feat: kendi sunucuna kurulum paketi (Docker + DEPLOY.md)` + push.
+- [ ] Step 1: Write all files (`bash -n` ile sözdizimi kontrolü). Step 2: `pnpm build` + `pnpm test` + tsc son kontrol. Step 3: Commit `feat: ubuntu kurulum scriptleri + DEPLOY.md (Cloudflare, guncelleme)` + push.

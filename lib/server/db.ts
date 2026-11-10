@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS products (
   store_id TEXT NOT NULL,
   barcode TEXT NOT NULL,
   name TEXT NOT NULL,
+  category TEXT,
   expected_qty REAL,
   PRIMARY KEY (store_id, barcode)
 );

@@ -4,6 +4,7 @@ import { ApiError } from "./auth"
 export type CatalogItem = {
   barcode: string
   name: string
+  category: string | null
   expected: number | null
 }
 
@@ -14,7 +15,7 @@ export function replaceCatalog(
 ): { count: number; version: number } {
   if (!Array.isArray(items)) throw new ApiError(400, "Geçersiz katalog verisi")
   const insert = db.prepare(
-    "INSERT OR REPLACE INTO products (store_id, barcode, name, expected_qty) VALUES (?, ?, ?, ?)"
+    "INSERT OR REPLACE INTO products (store_id, barcode, name, category, expected_qty) VALUES (?, ?, ?, ?, ?)"
   )
   db.exec("BEGIN")
   try {
@@ -22,7 +23,8 @@ export function replaceCatalog(
     for (const item of items) {
       const barcode = String(item.barcode ?? "").trim()
       if (!barcode) continue
-      insert.run(storeId, barcode, String(item.name ?? "").trim(), item.expected)
+      const category = item.category == null ? null : String(item.category).trim() || null
+      insert.run(storeId, barcode, String(item.name ?? "").trim(), category, item.expected)
     }
     db.prepare(
       "UPDATE stores SET catalog_version = catalog_version + 1 WHERE id = ?"
@@ -57,7 +59,7 @@ export function getCatalog(
   const version = catalogVersion(db, storeId)
   if (since !== undefined && since === version) return { version, unchanged: true }
   const rows = db
-    .prepare("SELECT barcode, name, expected_qty AS expected FROM products WHERE store_id = ?")
+    .prepare("SELECT barcode, name, category, expected_qty AS expected FROM products WHERE store_id = ?")
     .all(storeId) as CatalogItem[]
   return { version, items: rows }
 }

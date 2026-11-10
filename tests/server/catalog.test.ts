@@ -16,8 +16,8 @@ function setup() {
 test("replace and get catalog", () => {
   const { db, storeId } = setup()
   const items: CatalogItem[] = [
-    { barcode: "8690123456789", name: "Süt 1L", expected: 24 },
-    { barcode: "8691234567890", name: "Ekmek", expected: null },
+    { barcode: "8690123456789", name: "Süt 1L", category: "Kahvaltılık", expected: 24 },
+    { barcode: "8691234567890", name: "Ekmek", category: null, expected: null },
   ]
   const r1 = replaceCatalog(db, storeId, items)
   expect(r1.count).toBe(2)
@@ -32,7 +32,7 @@ test("replace and get catalog", () => {
 
 test("since: unchanged when version matches", () => {
   const { db, storeId } = setup()
-  replaceCatalog(db, storeId, [{ barcode: "1", name: "a", expected: null }])
+  replaceCatalog(db, storeId, [{ barcode: "1", name: "a", category: null, expected: null }])
   const got = getCatalog(db, storeId, 1)
   expect(got.unchanged).toBe(true)
   expect(got.items).toBeUndefined()
@@ -42,13 +42,15 @@ test("since: unchanged when version matches", () => {
 test("turkish names roundtrip exactly", () => {
   const { db, storeId } = setup()
   const name = "Şeftali Yoğurt İçeceği ğüşıÖÇ"
-  replaceCatalog(db, storeId, [{ barcode: "869", name, expected: null }])
-  expect(getCatalog(db, storeId).items?.[0].name).toBe(name)
+  replaceCatalog(db, storeId, [{ barcode: "869", name, category: "Yoğurt & Süt ürünleri", expected: null }])
+  const item = getCatalog(db, storeId).items?.[0]
+  expect(item?.name).toBe(name)
+  expect(item?.category).toBe("Yoğurt & Süt ürünleri")
 })
 
 test("leading-zero barcode stays string", () => {
   const { db, storeId } = setup()
-  replaceCatalog(db, storeId, [{ barcode: "0012345", name: "x", expected: null }])
+  replaceCatalog(db, storeId, [{ barcode: "0012345", name: "x", category: null, expected: null }])
   expect(getCatalog(db, storeId).items?.[0].barcode).toBe("0012345")
 })
 
@@ -57,6 +59,7 @@ test("bulk 20k rows under 3s", () => {
   const items: CatalogItem[] = Array.from({ length: 20000 }, (_, i) => ({
     barcode: String(8690000000000 + i),
     name: `Ürün ${i}`,
+    category: `Kategori ${i % 20}`,
     expected: i % 7 === 0 ? null : i % 50,
   }))
   const start = Date.now()

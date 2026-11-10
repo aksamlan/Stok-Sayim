@@ -17,7 +17,10 @@ senkronlanması. Kullanıcının kendi sunucusunda (4 CPU / 7 GB, Linux) barınd
 - Şifreler scrypt ile hash'lenir (node:crypto, ek bağımlılık yok).
 
 ## Katalog
-- Yönetici panodan XLSX/CSV yükler: barkod + ürün adı + (opsiyonel) beklenen stok adedi.
+- Yönetici panodan XLSX/CSV yükler: barkod + ürün adı + (opsiyonel) kategori + (opsiyonel)
+  beklenen stok adedi. Kategori sütunu varsa ürünler kategoriye göre ayrılır: sayım
+  ekranında ürün adının yanında kategorisi görünür, panoda kategori kırılımı tablosu ve
+  kategori filtresi olur, dışa aktarmalara kategori sütunu eklenir.
 - İstemci tarafında parse edilir (mevcut `xlsx` bağımlılığı), sütunlar başlıktan otomatik
   seçilir (barkod/barcode, ad/ürün/name, stok/adet/miktar) ve kullanıcı açılır menüden
   düzeltebilir. Barkodlar HER ZAMAN string'e çevrilir (Excel'in 13 haneli sayıları bozmasına
@@ -59,7 +62,7 @@ senkronlanması. Kullanıcının kendi sunucusunda (4 CPU / 7 GB, Linux) barınd
   Ek native bağımlılık yok. DB dosyası `DATA_DIR` (varsayılan `./data`) altında `stok.db`.
 - Şema: `stores(id, code UNIQUE, name, count_pw_hash, admin_pw_hash, catalog_version, created_at)`,
   `sessions(id, store_id, name, status, created_at)`,
-  `products(store_id, barcode, name, expected_qty, PRIMARY KEY(store_id, barcode))`,
+  `products(store_id, barcode, name, category, expected_qty, PRIMARY KEY(store_id, barcode))`,
   `scan_events(id PK, store_id, session_id, counter, barcode, qty, created_at, received_at)`
   + indeksler `(store_id, session_id, barcode)` ve `(store_id, session_id, counter)`,
   `meta(key PK, value)`.
@@ -71,10 +74,19 @@ senkronlanması. Kullanıcının kendi sunucusunda (4 CPU / 7 GB, Linux) barınd
   `components/camera-scanner.tsx` bileşeni olarak store moduna taşınır (ana sayfa koduna
   dokunulmaz — regresyon riski alınmaz).
 
-## Dağıtım
-- `Dockerfile` (node:24-alpine, pnpm, `next build`, `next start`, `/app/data` volume) +
-  `docker-compose.yml` + Türkçe `DEPLOY.md` (Docker yolu, çıplak Node yolu, yedekleme =
-  data klasörünü kopyala, reverse proxy notu). 4 CPU / 7 GB fazlasıyla yeter.
+## Dağıtım (Ubuntu sunucu, gizli repo, Cloudflare)
+- Hedef: kullanıcının Ubuntu sunucusuna script ile adım adım kurulum. Repo GİZLİ:
+  klonlama GitHub deploy key (read-only SSH) ile anlatılır.
+- `scripts/kurulum.sh`: Node 24 kurulumu (NodeSource), pnpm (corepack), bağımlılıklar,
+  `next build`, `data/` dizini, systemd servisi (`stok-sayim.service`, otomatik restart),
+  Caddy reverse proxy kurulumu + alan adı sorusu (Caddy otomatik HTTPS; Cloudflare
+  proxy'li kullanım için notlar: SSL mode Full, orange cloud).
+- `scripts/guncelle.sh`: `git pull` + `pnpm install` + `pnpm build` + servis restart,
+  tek komutla güncelleme.
+- `Dockerfile` + `docker-compose.yml` alternatif yol olarak kalır.
+- Türkçe `DEPLOY.md`: adım adım (sunucuya bağlanma, deploy key oluşturma, klonlama,
+  kurulum scripti, alan adını Cloudflare'de A kaydıyla bağlama, güncelleme, yedekleme =
+  `data/` klasörünü kopyala). 4 CPU / 7 GB fazlasıyla yeter.
 
 ## Performans hedefleri
 - 100k satır katalog yükleme: tek transaction, < 10 sn.
