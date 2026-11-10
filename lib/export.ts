@@ -323,3 +323,137 @@ export const shareCompare = (rows: CompareRow[], sessionName: string) =>
     `Stok Karşılaştırma — ${sessionName}`,
     buildCompareText(rows, sessionName)
   )
+
+// ------------------------------------------------- Mağaza modu raporu
+
+export interface StoreReportRow {
+  barcode: string
+  name: string | null
+  category: string | null
+  expected: number | null
+  counted: number
+  status: CompareRow["status"]
+}
+
+const storeDiffText = (r: StoreReportRow) => {
+  if (r.status === "only-count") return `+${r.counted}`
+  if (r.expected == null) return ""
+  const d = r.counted - r.expected
+  return d > 0 ? `+${d}` : String(d)
+}
+
+export const storeReportToCSV = (rows: StoreReportRow[]) =>
+  [
+    "Barkod;Ürün Adı;Kategori;Beklenen;Sayılan;Fark;Durum",
+    ...rows.map(r =>
+      [
+        csvCell(r.barcode),
+        csvCell(r.name ?? ""),
+        csvCell(r.category ?? ""),
+        r.expected ?? "",
+        r.counted,
+        storeDiffText(r),
+        STATUS_TEXT[r.status],
+      ].join(";")
+    ),
+  ].join("\r\n")
+
+const storeFileBase = (storeName: string, sessionName: string) =>
+  `stokzen_${safeName(storeName)}_${safeName(sessionName)}_${todayStr()}`
+
+export const downloadStoreReportCSV = (
+  rows: StoreReportRow[],
+  storeName: string,
+  sessionName: string
+) => {
+  const blob = new Blob(["﻿" + storeReportToCSV(rows)], {
+    type: "text/csv;charset=utf-8;",
+  })
+  downloadBlob(blob, `${storeFileBase(storeName, sessionName)}.csv`)
+}
+
+export const downloadStoreReportXLSX = async (
+  rows: StoreReportRow[],
+  storeName: string,
+  sessionName: string
+) => {
+  const XLSX = await import("xlsx")
+  const ws = XLSX.utils.aoa_to_sheet([
+    ["Barkod", "Ürün Adı", "Kategori", "Beklenen", "Sayılan", "Fark", "Durum"],
+    ...rows.map(r => [
+      r.barcode,
+      r.name ?? "",
+      r.category ?? "",
+      r.expected ?? "",
+      r.counted,
+      storeDiffText(r),
+      STATUS_TEXT[r.status],
+    ]),
+  ])
+  ws["!cols"] = [
+    { wch: 18 },
+    { wch: 32 },
+    { wch: 16 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 8 },
+    { wch: 12 },
+  ]
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, "Sayım Raporu")
+  const out = XLSX.write(wb, { bookType: "xlsx", type: "array" })
+  downloadBlob(
+    new Blob([out], { type: XLSX_MIME }),
+    `${storeFileBase(storeName, sessionName)}.xlsx`
+  )
+}
+
+export const printStoreReportPDF = (
+  rows: StoreReportRow[],
+  storeName: string,
+  sessionName: string
+): boolean => {
+  const counts = {
+    match: rows.filter(r => r.status === "match").length,
+    difference: rows.filter(r => r.status === "difference").length,
+    onlyStock: rows.filter(r => r.status === "only-stock").length,
+    onlyCount: rows.filter(r => r.status === "only-count").length,
+  }
+  const trs = rows
+    .map(
+      r =>
+        `<tr class="${r.status}"><td class="mono">${escHtml(r.barcode)}</td>` +
+        `<td>${escHtml(r.name ?? "-")}</td><td>${escHtml(r.category ?? "-")}</td>` +
+        `<td class="num">${r.expected ?? "-"}</td><td class="num">${r.counted}</td>` +
+        `<td class="num">${storeDiffText(r) || "-"}</td><td>${STATUS_TEXT[r.status]}</td></tr>`
+    )
+    .join("")
+  const body = `
+    <h1>Stokzen Sayım Raporu</h1>
+    <p class="meta">Mağaza: ${escHtml(storeName)} · Sayım: ${escHtml(sessionName)} · ${escHtml(dateTimeStr())}</p>
+    <p class="totals">Eşit: <b>${counts.match}</b> · Farklı: <b>${counts.difference}</b> · Sayılmadı: <b>${counts.onlyStock}</b> · Listede yok: <b>${counts.onlyCount}</b></p>
+    <table><thead><tr><th>Barkod</th><th>Ürün Adı</th><th>Kategori</th><th class="num">Beklenen</th><th class="num">Sayılan</th><th class="num">Fark</th><th>Durum</th></tr></thead><tbody>${trs}</tbody></table>`
+  return openPrintWindow(`Stokzen - ${storeName} - ${sessionName}`, body)
+}
+
+export const shareStoreReport = (
+  rows: StoreReportRow[],
+  storeName: string,
+  sessionName: string
+) =>
+  shareWith(
+    storeReportToCSV(rows),
+    `${storeFileBase(storeName, sessionName)}.csv`,
+    `Stokzen Sayım — ${storeName} / ${sessionName}`,
+    `📊 Stokzen Sayım — ${storeName} / ${sessionName} (${dateTimeStr()})\n` +
+      `Eşit: ${rows.filter(r => r.status === "match").length} · ` +
+      `Sorunlu: ${rows.filter(r => r.status !== "match").length}\n\n` +
+      rows
+        .filter(r => r.status !== "match")
+        .slice(0, 200)
+        .map(
+          r =>
+            `${r.barcode} ${r.name ?? ""}: beklenen ${r.expected ?? "-"}, sayılan ${r.counted} — ${STATUS_TEXT[r.status]}`
+        )
+        .join("\n")
+  )
