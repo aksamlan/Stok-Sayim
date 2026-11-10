@@ -3,8 +3,8 @@
 Bu rehber, uygulamayı **kendi Ubuntu sunucuna** (7 GB RAM / 4 CPU fazlasıyla yeter)
 adım adım kurmanı sağlar. Tüm komutlar kopyala-yapıştır içindir.
 
-> Özet: deploy key ile klonla → `sudo bash scripts/kurulum.sh alan.adi.com` →
-> `node scripts/yonetici-sifre.mjs <şifre>` → bitti.
+> Özet: deploy key ile klonla → `sudo bash scripts/kurulum.sh` → menüden **1**
+> seç → script her şeyi sorar ve kurar. Bitti.
 
 ---
 
@@ -41,35 +41,38 @@ git clone git@github.com-stok:aksamlan/Stok-Sayim.git ~/stok-sayim
 cd ~/stok-sayim
 ```
 
-## 3. Kurulum scriptini çalıştır
-
-**Alan adıyla** (önerilen — otomatik HTTPS dahil):
-
-```bash
-sudo bash scripts/kurulum.sh stok.alanadin.com
-```
-
-**Alan adsız** (sadece IP ile kullanacaksan):
-
-```bash
-sudo bash scripts/kurulum.sh
-```
-
-Script sırasıyla şunları yapar: Node 24 + pnpm kurar, bağımlılıkları indirir,
-uygulamayı derler, `data/` klasörünü oluşturur, `stok-sayim` adlı systemd
-servisini kurup başlatır (sunucu yeniden başlasa bile uygulama otomatik açılır)
-ve alan adı verdiysen Caddy reverse proxy + otomatik HTTPS kurar.
-
-## 4. Platform yöneticisi (/yonetim) şifresini belirle
+## 3. Yönetim scriptini aç — her şey menüden
 
 ```bash
 cd ~/stok-sayim
-node scripts/yonetici-sifre.mjs COK-GIZLI-SIFRE
+sudo bash scripts/kurulum.sh
 ```
 
-Bu şifreyle `https://alan.adi.com/yonetim` paneline girersin: tüm mağazaları,
-kim ne saymış görürsün; şifresini unutan mağazaya yeni şifre verirsin.
-Şifreyi unutursan aynı komutu tekrar çalıştırman yeter (sadece sunucudan değişir).
+Karşına menü çıkar:
+
+```
+  1) Kurulum        (Node + build + servis; alan adı ve şifre sorulur)
+  2) Güncelle       (git pull + build + migrasyon + servis restart)
+  3) Alan adı bağla / değiştir (Caddy, otomatik HTTPS)
+  4) /yonetim şifresi belirle / sıfırla
+  5) Durum ve loglar
+  6) Servisi yeniden başlat
+  7) Yedek al (data/ klasörü)
+  0) Çıkış
+```
+
+İlk kurulumda **1**'i seç: script Node 24 + pnpm kurar, uygulamayı derler,
+`stok-sayim` systemd servisini kurup başlatır (sunucu yeniden başlasa bile
+uygulama otomatik açılır), sonra sana sırayla sorar:
+
+- **Alan adı** (örn. `stok.alanadin.com`) — yazarsan Caddy + otomatik HTTPS
+  kurulur; boş geçersen `http://SUNUCU-IP:3000` ile kullanırsın.
+- **/yonetim şifresi** — platform yönetim panelinin şifresi. Bu şifreyle
+  `/yonetim` paneline girersin: tüm mağazaları, kim ne saymış görürsün;
+  şifresini unutan mağazaya yeni şifre verirsin.
+
+Şifreyi sonradan değiştirmek/sıfırlamak için yine menüden **4**'ü seçmen
+yeterli (sadece sunucudan değiştirilebilir — güvenlik böyle sağlanıyor).
 
 ## 5. Alan adını Cloudflare'e bağla
 
@@ -86,17 +89,21 @@ kim ne saymış görürsün; şifresini unutan mağazaya yeni şifre verirsin.
 
 ## 6. Güncelleme (yeni sürüm çıktığında)
 
+Menüden **2**'yi seç — ya da kısayol:
+
 ```bash
 cd ~/stok-sayim
 bash scripts/guncelle.sh
 ```
 
-Kod çekilir, derlenir, servis yeniden başlar. **Veriler silinmez** — her şey
+Kod çekilir, derlenir, varsa veritabanı migrasyonları servis açılışında
+otomatik uygulanır, servis yeniden başlar. **Veriler silinmez** — her şey
 `data/` klasöründedir.
 
 ## 7. Yedekleme
 
-Tüm veri tek klasörde: `~/stok-sayim/data/`. Yedek = bu klasörü kopyalamak.
+Menüden **7** anında yedek alır (`~/stok-yedek-TARIH.tar.gz`). Tüm veri tek
+klasörde: `~/stok-sayim/data/` — yedek = bu klasörü kopyalamak.
 
 Günlük otomatik yedek için:
 
@@ -106,7 +113,10 @@ crontab -e
 0 3 * * * tar czf $HOME/yedek-stok-$(date +\%F).tar.gz -C $HOME/stok-sayim data && ls -t $HOME/yedek-stok-*.tar.gz | tail -n +15 | xargs -r rm
 ```
 
-## 8. Servis komutları
+## 8. Servis durumu ve loglar
+
+Menüden **5** durumu ve son logları gösterir, **6** servisi yeniden başlatır.
+Elle bakmak istersen:
 
 ```bash
 systemctl status stok-sayim      # durum

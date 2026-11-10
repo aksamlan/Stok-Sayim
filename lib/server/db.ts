@@ -46,6 +46,30 @@ CREATE INDEX IF NOT EXISTS idx_events_barcode ON scan_events(store_id, session_i
 CREATE INDEX IF NOT EXISTS idx_events_counter ON scan_events(store_id, session_id, counter);
 `
 
+// Gelecek sürümlerde şema değişiklikleri buraya eklenir (her giriş bir sürüm):
+// örn. "ALTER TABLE products ADD COLUMN price REAL" → v2.
+// Servis her açılışta eksik migrasyonları sırayla ve transaction içinde uygular.
+const MIGRATIONS: string[] = []
+
+function applyMigrations(db: DatabaseSync): void {
+  const raw = getMeta(db, "schema_version")
+  let current = raw ? Number(raw) : 1
+  if (!Number.isFinite(current) || current < 1) current = 1
+  const target = 1 + MIGRATIONS.length
+  for (let v = current; v < target; v++) {
+    db.exec("BEGIN")
+    try {
+      db.exec(MIGRATIONS[v - 1])
+      setMeta(db, "schema_version", String(v + 1))
+      db.exec("COMMIT")
+    } catch (e) {
+      db.exec("ROLLBACK")
+      throw e
+    }
+  }
+  if (!raw) setMeta(db, "schema_version", String(target))
+}
+
 export function openDatabase(dbPath: string): DatabaseSync {
   if (dbPath !== ":memory:") {
     mkdirSync(path.dirname(dbPath), { recursive: true })
@@ -56,6 +80,7 @@ export function openDatabase(dbPath: string): DatabaseSync {
   }
   db.exec("PRAGMA foreign_keys=ON")
   db.exec(SCHEMA)
+  applyMigrations(db)
   return db
 }
 

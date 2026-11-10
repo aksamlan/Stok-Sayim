@@ -32,11 +32,13 @@ altındaki `stok.db` dosyasındadır.
 
 ## Sunucuya kurulum
 
-Adım adım Ubuntu kurulumu (deploy key, kurulum scripti, Cloudflare alan adı,
-güncelleme, yedekleme): **[DEPLOY.md](DEPLOY.md)**
+Adım adım Ubuntu kurulumu (deploy key, Cloudflare alan adı, güncelleme,
+yedekleme): **[DEPLOY.md](DEPLOY.md)**
+
+Tek script, her şey menüden:
 
 ```bash
-sudo bash scripts/kurulum.sh stok.alanadin.com   # kurulum + HTTPS
-node scripts/yonetici-sifre.mjs <şifre>          # /yonetim şifresi
-bash scripts/guncelle.sh                         # güncelleme
+sudo bash scripts/kurulum.sh
+# 1) Kurulum  2) Güncelle  3) Alan adı  4) /yonetim şifresi
+# 5) Durum/loglar  6) Servis restart  7) Yedek
 ```
