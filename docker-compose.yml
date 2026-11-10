@@ -3,8 +3,8 @@ services:
     build: .
     ports:
       # Varsayılan: yalnız bu sunucudan erişim (önüne Caddy/Nginx koy).
-      # Alan adsız, doğrudan IP:3000 ile kullanacaksan "3000:3000" yap.
-      - "127.0.0.1:3000:3000"
+      # Alan adsız, doğrudan IP:3009 ile kullanacaksan "3009:3009" yap.
+      - "127.0.0.1:3009:3009"
     volumes:
       - ./data:/app/data
     # E-posta (SMTP) kullanacaksan bu satırı aç ve dosyayı oluştur:

@@ -102,7 +102,7 @@ User=$RUN_USER
 WorkingDirectory=$REPO_DIR
 Environment=NODE_ENV=production
 Environment=DATA_DIR=$REPO_DIR/data
-Environment=PORT=3000
+Environment=PORT=3009
 EnvironmentFile=-$ENV_FILE
 ExecStart=$pnpm_bin start \$STOK_BIND_ARGS
 Restart=always
@@ -146,7 +146,7 @@ alan_adi_bagla() {
 $domain {
 	# 100k ürünlük katalog ~10 MB JSON'dur; sıkıştırma ile ~1.5 MB iner.
 	encode zstd gzip
-	reverse_proxy localhost:3000
+	reverse_proxy localhost:3009
 }
 CADDYEOF
   zorunlu systemctl reload caddy || zorunlu systemctl restart caddy || return 1
@@ -254,7 +254,7 @@ kurulum() {
     smtp_ayarla || hata "SMTP ayarlanamadı; menüden (4) tekrar deneyebilirsin."
   fi
   basari "KURULUM TAMAM"
-  echo "- Uygulama:      http://$(hostname -I 2>/dev/null | awk '{print $1}'):3000"
+  echo "- Uygulama:      http://$(hostname -I 2>/dev/null | awk '{print $1}'):3009"
   [ -n "${domain:-}" ] && echo "- Alan adı:      https://$domain"
   echo "- Loglar:        journalctl -u $SERVICE -f"
 }

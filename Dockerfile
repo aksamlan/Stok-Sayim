@@ -12,8 +12,8 @@ RUN pnpm build
 
 ENV NODE_ENV=production
 ENV DATA_DIR=/app/data
-ENV PORT=3000
+ENV PORT=3009
 VOLUME /app/data
-EXPOSE 3000
+EXPOSE 3009
 
 CMD ["pnpm", "start"]

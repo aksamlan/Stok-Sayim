@@ -68,7 +68,7 @@ Karşına menü çıkar:
 uygulama otomatik açılır), sonra sana sırayla sorar:
 
 - **Alan adı** (örn. `stok.alanadin.com`) — yazarsan Caddy + otomatik HTTPS
-  kurulur; boş geçersen `http://SUNUCU-IP:3000` ile kullanırsın.
+  kurulur; boş geçersen `http://SUNUCU-IP:3009` ile kullanırsın.
 - **/yonetim şifresi** — platform yönetim panelinin şifresi. Bu şifreyle
   `/yonetim` paneline girersin: tüm mağazaları, kim ne saymış görürsün;
   şifresini unutan mağazaya yeni şifre verirsin.
@@ -124,7 +124,7 @@ ya da 0 yapıp kapatabilirsin.
 ### Güvenlik notu
 
 Alan adı bağlandığında script uygulamayı yalnız `127.0.0.1`'e bağlar: dışarıdan
-sadece Caddy üzerinden (HTTPS) erişilir, `:3000` portu internete kapalı olur.
+sadece Caddy üzerinden (HTTPS) erişilir, `:3009` portu internete kapalı olur.
 İstersen güvenlik duvarını da aç:
 
 ```bash
@@ -213,7 +213,7 @@ server {
     gzip_comp_level 5;
 
     location / {
-        proxy_pass http://127.0.0.1:3000;
+        proxy_pass http://127.0.0.1:3009;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         # ŞART: hız limiti istemci IP'sini X-Forwarded-For'un SON girdisinden okur.
