@@ -488,8 +488,8 @@ export default function MagazaPage() {
 
             <p className="text-center text-xs text-muted-foreground mt-4">
               Tek kişilik yerel sayım için{" "}
-              <Link href="/" className="text-primary underline underline-offset-2">
-                ana sayfaya dön
+              <Link href="/sayim" className="text-primary underline underline-offset-2">
+                normal sayıma geç
               </Link>
             </p>
           </>
