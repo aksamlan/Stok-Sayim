@@ -946,13 +946,13 @@ function InventoryCounterContent() {
   const getStatusBadge = (status: ComparisonResult["status"]) => {
     switch (status) {
       case "match":
-        return <Badge className="bg-green-500 hover:bg-green-600"><CheckCircle2 className="h-3 w-3 mr-1" />Eşit</Badge>
+        return <Badge className="bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30 hover:bg-green-500/15"><CheckCircle2 className="h-3 w-3 mr-1" />Eşit</Badge>
       case "difference":
-        return <Badge className="bg-amber-500 hover:bg-amber-600"><AlertTriangle className="h-3 w-3 mr-1" />Farklı</Badge>
+        return <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/15"><AlertTriangle className="h-3 w-3 mr-1" />Farklı</Badge>
       case "only-stock":
-        return <Badge className="bg-red-500 hover:bg-red-600"><XCircle className="h-3 w-3 mr-1" />Sayılmadı</Badge>
+        return <Badge className="bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30 hover:bg-red-500/15"><XCircle className="h-3 w-3 mr-1" />Sayılmadı</Badge>
       case "only-count":
-        return <Badge className="bg-blue-500 hover:bg-blue-600"><Plus className="h-3 w-3 mr-1" />Fazla</Badge>
+        return <Badge className="bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30 hover:bg-blue-500/15"><Plus className="h-3 w-3 mr-1" />Fazla</Badge>
     }
   }
 
@@ -965,22 +965,29 @@ function InventoryCounterContent() {
         toastOptions={{ style: { fontSize: "0.95rem" } }}
         visibleToasts={3}
       />
-      <div className="container mx-auto p-4 max-w-4xl">
+      <div className="container mx-auto p-3 sm:p-5 max-w-3xl">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold">Stok Sayım</h1>
-          <div className="flex gap-2">
+        <div className="flex items-center justify-between mb-3">
+          <h1 className="flex items-center gap-2 text-lg sm:text-xl font-bold tracking-tight">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
+              <ScanBarcode className="h-4 w-4" />
+            </span>
+            Stok Sayım
+          </h1>
+          <div className="flex gap-1">
             <Button
-              variant="outline"
+              variant="ghost"
               size="icon"
+              className="h-8 w-8 text-muted-foreground"
               onClick={() => setSoundEnabled(!soundEnabled)}
               title={soundEnabled ? "Sesi Kapat" : "Sesi Aç"}
             >
               {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
             </Button>
             <Button
-              variant="outline"
+              variant="ghost"
               size="icon"
+              className="h-8 w-8 text-muted-foreground"
               onClick={() => setDarkMode(!darkMode)}
               title={darkMode ? "Açık Tema" : "Koyu Tema"}
             >
@@ -990,18 +997,15 @@ function InventoryCounterContent() {
         </div>
 
         {/* Count Session Bar */}
-        <Card className="mb-4">
-          <CardContent className="py-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <ClipboardList className="h-4 w-4 text-primary" />
-                <span className="hidden sm:inline">Aktif Sayım</span>
-              </div>
+        <Card className="mb-3 py-0 gap-0">
+          <CardContent className="px-2.5 py-2">
+            <div className="flex items-center gap-1.5">
+              <ClipboardList className="h-4 w-4 text-primary shrink-0 ml-1" />
               <select
                 value={activeSessionId ?? ""}
                 onChange={(e) => switchSession(e.target.value)}
-                className="flex-1 min-w-[140px] h-9 rounded-md border border-input bg-background px-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ring"
-                title="Sayım seç"
+                className="flex-1 min-w-0 h-8 rounded-md border border-input bg-background px-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ring"
+                title="Sayım seç — yeni sayım başlatınca mevcut olan dondurulur"
               >
                 {sessions.map((s) => (
                   <option key={s.id} value={s.id}>
@@ -1011,9 +1015,9 @@ function InventoryCounterContent() {
               </select>
               <Button
                 type="button"
-                variant="outline"
-                size="sm"
-                className="bg-transparent"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground"
                 onClick={() => {
                   const current = sessions.find(s => s.id === activeSessionId)
                   setRenameValue(current?.name ?? "")
@@ -1027,9 +1031,9 @@ function InventoryCounterContent() {
                 <AlertDialogTrigger asChild>
                   <Button
                     type="button"
-                    variant="outline"
-                    size="sm"
-                    className="bg-transparent text-destructive"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive"
                     title="Bu sayımı sil"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -1048,14 +1052,11 @@ function InventoryCounterContent() {
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
-              <Button type="button" size="sm" onClick={newSession}>
-                <PlusCircle className="h-4 w-4 mr-1.5" />
-                Yeni Sayım
+              <Button type="button" size="sm" className="h-8" onClick={newSession}>
+                <PlusCircle className="h-4 w-4 sm:mr-1.5" />
+                <span className="hidden sm:inline">Yeni Sayım</span>
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Yeni sayım başlattığınızda mevcut sayım dondurulur; listeden seçerek kaldığınız yerden devam edersiniz.
-            </p>
           </CardContent>
         </Card>
 
@@ -1088,105 +1089,95 @@ function InventoryCounterContent() {
 
         {/* Last Scanned Indicator */}
         {lastScannedPersistent && (
-          <Card className="mb-4 border-primary/30 bg-primary/5">
-            <CardContent className="py-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <ScanBarcode className="h-5 w-5 text-primary" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Son Okutulan Barkod</p>
-                    <p className="font-mono text-lg font-bold text-primary">{lastScannedPersistent}</p>
-                  </div>
-                </div>
-                {items.find(i => i.barcode === lastScannedPersistent) && (
-                  <div className="text-right">
-                    <p className="text-xs text-muted-foreground">Mevcut Adet</p>
-                    <p className="text-lg font-bold">{items.find(i => i.barcode === lastScannedPersistent)?.quantity}</p>
-                  </div>
-                )}
+          <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <ScanBarcode className="h-4 w-4 text-primary shrink-0" />
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground leading-tight">Son Okutulan</p>
+                <p className="font-mono text-base font-bold text-primary leading-tight truncate">{lastScannedPersistent}</p>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+            {items.find(i => i.barcode === lastScannedPersistent) && (
+              <Badge variant="secondary" className="font-mono text-sm shrink-0">
+                {items.find(i => i.barcode === lastScannedPersistent)?.quantity} adet
+              </Badge>
+            )}
+          </div>
         )}
 
         {/* Input Section */}
-        <Card className="mb-6">
-          <CardContent className="pt-6">
-            <form onSubmit={handleBarcodeScan} className="flex flex-col sm:flex-row gap-4">
-              <div className="flex-1">
-                <label htmlFor="barcode" className="text-sm font-medium mb-2 block">
-                  Barkod
-                </label>
-                <div className="flex gap-2">
-                  <Input
-                    id="barcode"
-                    ref={barcodeInputRef}
-                    type="text"
-                    value={barcodeInput}
-                    onChange={(e) => setBarcodeInput(e.target.value)}
-                    placeholder="Barkod okutun veya yazın..."
-                    className="font-mono text-lg h-12"
-                    autoComplete="off"
-                    autoFocus
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-12 px-3 bg-transparent"
-                    onClick={() => setCameraOpen(true)}
-                    title="Kamera ile Okut"
-                  >
-                    <Camera className="h-5 w-5" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-12 px-3 bg-transparent"
-                    onClick={() => photoInputRef.current?.click()}
-                    disabled={photoBusy}
-                    title="Fotoğraftan Okut (galeri veya çekim)"
-                  >
-                    <ImageUp className="h-5 w-5" />
-                  </Button>
-                  <input
-                    ref={photoInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handlePhotoSelected}
-                    className="hidden"
-                  />
-                </div>
-              </div>
-              <div className="flex items-end">
-                <Button type="submit" className="h-12 px-6 w-full sm:w-auto">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Ekle{quickMode ? ` (${quickQty})` : ""}
+        <Card className="mb-3 py-0 gap-0">
+          <CardContent className="p-3 sm:p-4">
+            <form onSubmit={handleBarcodeScan} className="flex flex-col sm:flex-row gap-2">
+              <div className="flex flex-1 gap-2">
+                <Input
+                  id="barcode"
+                  ref={barcodeInputRef}
+                  type="text"
+                  value={barcodeInput}
+                  onChange={(e) => setBarcodeInput(e.target.value)}
+                  placeholder="Barkod okutun veya yazın..."
+                  className="font-mono text-base h-11 flex-1 min-w-0"
+                  autoComplete="off"
+                  autoFocus
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-11 w-11 shrink-0 bg-transparent"
+                  onClick={() => setCameraOpen(true)}
+                  title="Kamera ile Okut"
+                >
+                  <Camera className="h-5 w-5" />
                 </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-11 w-11 shrink-0 bg-transparent"
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={photoBusy}
+                  title="Fotoğraftan Okut (galeri veya çekim)"
+                >
+                  <ImageUp className="h-5 w-5" />
+                </Button>
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoSelected}
+                  className="hidden"
+                />
               </div>
+              <Button type="submit" className="h-11 px-5">
+                <Plus className="h-4 w-4 mr-1.5" />
+                Ekle{quickMode ? ` (${quickQty})` : ""}
+              </Button>
             </form>
 
             {/* Quick Add Mode */}
-            <div className="mt-4 pt-4 border-t">
-              <div className="flex flex-wrap items-center gap-2">
+            <div className="mt-3 pt-3 border-t">
+              <div className="flex flex-wrap items-center gap-1.5">
                 <Button
                   type="button"
                   variant={quickMode ? "default" : "outline"}
                   size="sm"
                   onClick={() => setQuickMode(!quickMode)}
-                  className={quickMode ? "" : "bg-transparent"}
+                  className={`h-8 ${quickMode ? "" : "bg-transparent"}`}
                 >
-                  <Zap className={`h-4 w-4 mr-1.5 ${quickMode ? "fill-current" : ""}`} />
-                  Hızlı Ekleme {quickMode ? "Açık" : "Kapalı"}
+                  <Zap className={`h-3.5 w-3.5 mr-1 ${quickMode ? "fill-current" : ""}`} />
+                  Hızlı Ekleme
                 </Button>
                 {quickMode && (
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-1">
                     {[1, 5, 10, 20, 50, 100].map((qty) => (
                       <Button
                         key={qty}
                         type="button"
-                        variant={quickQty === qty ? "default" : "outline"}
+                        variant={quickQty === qty ? "secondary" : "ghost"}
                         size="sm"
-                        className={`min-w-[44px] font-mono ${quickQty === qty ? "" : "bg-transparent"}`}
+                        className={`h-8 min-w-10 px-2 font-mono ${quickQty === qty ? "ring-1 ring-primary/40 text-primary font-bold" : "text-muted-foreground"}`}
                         onClick={() => setQuickQty(qty)}
                       >
                         {qty}
@@ -1194,14 +1185,14 @@ function InventoryCounterContent() {
                     ))}
                   </div>
                 )}
+                <p className="text-xs text-muted-foreground basis-full mt-1">
+                  {quickMode ? (
+                    <>Her okutmada <b>{quickQty} adet</b> eklenir, kamera açık kalır.</>
+                  ) : (
+                    <>Okutunca adet soran pencere açılır.</>
+                  )}
+                </p>
               </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                {quickMode ? (
-                  <>Her okutmada <b>{quickQty} adet</b> otomatik eklenir. Kamera açık kalır, art arda okutabilirsiniz.</>
-                ) : (
-                  <>Okutunca adet soran pencere açılır.</>
-                )}
-              </p>
             </div>
           </CardContent>
         </Card>
@@ -1386,7 +1377,7 @@ function InventoryCounterContent() {
         </AlertDialog>
 
         {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "count" | "compare")} className="mb-6">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "count" | "compare")} className="mb-4">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="count">Sayım Listesi</TabsTrigger>
             <TabsTrigger value="compare">
@@ -1397,31 +1388,27 @@ function InventoryCounterContent() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="count" className="mt-6">
+          <TabsContent value="count" className="mt-3">
             {/* Stats & Actions */}
-            <div className="flex flex-col sm:flex-row gap-4 mb-6">
-              <Card className="flex-1">
-                <CardContent className="py-4">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Toplam Ürün</p>
-                      <p className="text-2xl font-bold">{totalQuantity}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm text-muted-foreground">Farklı Barkod</p>
-                      <p className="text-2xl font-bold">{totalUniqueItems}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <div className="flex gap-2 flex-wrap">
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <div className="flex gap-2">
+                <div className="rounded-lg border bg-card px-3 py-1.5 min-w-[84px]">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground leading-tight">Toplam Ürün</p>
+                  <p className="text-lg font-bold leading-snug tabular-nums">{totalQuantity}</p>
+                </div>
+                <div className="rounded-lg border bg-card px-3 py-1.5 min-w-[84px]">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground leading-tight">Farklı Barkod</p>
+                  <p className="text-lg font-bold leading-snug tabular-nums">{totalUniqueItems}</p>
+                </div>
+              </div>
+
+              <div className="flex gap-1.5 flex-wrap sm:ml-auto">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" disabled={items.length === 0}>
-                      <Download className="h-4 w-4 mr-2" />
+                    <Button variant="outline" size="sm" className="h-9" disabled={items.length === 0}>
+                      <Download className="h-4 w-4 mr-1.5" />
                       Dışa Aktar
-                      <ChevronDown className="h-4 w-4 ml-1.5 opacity-60" />
+                      <ChevronDown className="h-3.5 w-3.5 ml-1 opacity-60" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start">
@@ -1439,12 +1426,12 @@ function InventoryCounterContent() {
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-                <Button variant="outline" onClick={handleShareCount} disabled={items.length === 0}>
-                  <Share2 className="h-4 w-4 mr-2" />
+                <Button variant="outline" size="sm" className="h-9" onClick={handleShareCount} disabled={items.length === 0}>
+                  <Share2 className="h-4 w-4 mr-1.5" />
                   Paylaş
                 </Button>
-                <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
-                  <Upload className="h-4 w-4 mr-2" />
+                <Button variant="outline" size="sm" className="h-9" onClick={() => fileInputRef.current?.click()}>
+                  <Upload className="h-4 w-4 mr-1.5" />
                   CSV Yükle
                 </Button>
                 <input
@@ -1456,8 +1443,8 @@ function InventoryCounterContent() {
                 />
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="destructive" disabled={items.length === 0}>
-                      <RotateCcw className="h-4 w-4 mr-2" />
+                    <Button variant="outline" size="sm" className="h-9 text-destructive hover:text-destructive" disabled={items.length === 0}>
+                      <RotateCcw className="h-4 w-4 mr-1.5" />
                       Temizle
                     </Button>
                   </AlertDialogTrigger>
@@ -1478,62 +1465,56 @@ function InventoryCounterContent() {
             </div>
 
             {/* Search */}
-            <Card className="mb-6">
-              <CardContent className="py-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Barkod ara..."
-                    className="pl-10"
-                  />
-                </div>
-              </CardContent>
-            </Card>
+            <div className="relative mb-3">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Barkod ara..."
+                className="pl-9 h-10 bg-card"
+              />
+            </div>
 
             {/* Table */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Sayım Listesi</CardTitle>
-              </CardHeader>
-              <CardContent>
+            <Card className="py-0 gap-0 overflow-hidden">
+              <CardContent className="p-0">
                 {items.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <p className="text-lg">Henüz ürün eklenmedi</p>
-                    <p className="text-sm mt-2">Barkod okutarak başlayın</p>
+                  <div className="text-center py-10 text-muted-foreground">
+                    <ScanBarcode className="h-10 w-10 mx-auto mb-3 opacity-40" />
+                    <p className="font-medium">Henüz ürün eklenmedi</p>
+                    <p className="text-sm mt-1">Barkod okutarak başlayın</p>
                   </div>
                 ) : filteredItems.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <p className="text-lg">Sonuç bulunamadı</p>
-                    <p className="text-sm mt-2">{`"${searchQuery}" ile eşleşen barkod yok`}</p>
+                  <div className="text-center py-10 text-muted-foreground">
+                    <p className="font-medium">Sonuç bulunamadı</p>
+                    <p className="text-sm mt-1">{`"${searchQuery}" ile eşleşen barkod yok`}</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                  <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
                     <Table>
-                      <TableHeader className="sticky top-0 bg-background">
-                        <TableRow>
-                          <TableHead className="w-[50%]">Barkod</TableHead>
-                          <TableHead className="text-center">Adet</TableHead>
-                          <TableHead className="text-right">İşlemler</TableHead>
+                      <TableHeader className="sticky top-0 bg-card z-10 shadow-[0_1px_0_0_var(--border)]">
+                        <TableRow className="hover:bg-transparent">
+                          <TableHead className="h-9 px-3 text-xs">Barkod</TableHead>
+                          <TableHead className="h-9 text-center text-xs">Adet</TableHead>
+                          <TableHead className="h-9 px-3 text-right text-xs">İşlemler</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {filteredItems.map((item) => (
-                          <TableRow 
+                          <TableRow
                             key={item.barcode}
                             data-barcode={item.barcode}
-                            className={`transition-colors duration-300 ${lastScanned === item.barcode ? "bg-primary/20 ring-1 ring-primary/40" : item.barcode === lastScannedPersistent ? "bg-primary/5" : ""}`}
+                            className={`transition-colors duration-300 ${lastScanned === item.barcode ? "bg-primary/15" : item.barcode === lastScannedPersistent ? "bg-primary/5" : ""}`}
                           >
-                            <TableCell className="font-mono">{item.barcode}</TableCell>
-                            <TableCell className="text-center font-bold text-lg">{item.quantity}</TableCell>
-                            <TableCell>
+                            <TableCell className="font-mono text-[13px] px-3 py-1.5">{item.barcode}</TableCell>
+                            <TableCell className="text-center font-bold tabular-nums py-1.5">{item.quantity}</TableCell>
+                            <TableCell className="px-3 py-1.5">
                               <div className="flex justify-end gap-1">
                                 <Button
                                   variant="outline"
                                   size="icon"
-                                  className="h-8 w-8 bg-transparent"
+                                  className="h-7 w-7 bg-transparent"
                                   onClick={() => setDecrementConfirmBarcode(item.barcode)}
                                   disabled={item.quantity <= 1}
                                 >
@@ -1542,15 +1523,15 @@ function InventoryCounterContent() {
                                 <Button
                                   variant="outline"
                                   size="icon"
-                                  className="h-8 w-8 bg-transparent"
+                                  className="h-7 w-7 bg-transparent"
                                   onClick={() => incrementQuantity(item.barcode)}
                                 >
                                   <Plus className="h-3 w-3" />
                                 </Button>
                                 <Button
-                                  variant="destructive"
+                                  variant="ghost"
                                   size="icon"
-                                  className="h-8 w-8"
+                                  className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
                                   onClick={() => setDeleteConfirmBarcode(item.barcode)}
                                 >
                                   <Trash2 className="h-3 w-3" />
@@ -1567,50 +1548,49 @@ function InventoryCounterContent() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="compare" className="mt-6">
-            {/* Instructions Card */}
-            <Card className="mb-6 border-blue-500/30 bg-blue-500/5">
-              <CardContent className="py-4">
-                <h3 className="font-semibold mb-2">Nasıl Kullanılır?</h3>
-                <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
-                  <li><strong>Sayımdan önce:</strong> Mevcut stok listenizi CSV olarak yükleyin (aşağıdaki butonu kullanın)</li>
-                  <li><strong>Sayım yapın:</strong> "Sayım Listesi" sekmesinden barkodları okutarak sayım yapın</li>
-                  <li><strong>Karşılaştırın:</strong> Bu sekmeye dönüp sonuçları görün - farklar otomatik hesaplanır</li>
-                </ol>
-                <div className="mt-3 p-3 bg-muted rounded-md">
-                  <p className="text-xs font-medium mb-1">CSV Formatı:</p>
-                  <code className="text-xs">Barkod;Adet</code> veya <code className="text-xs">Barkod,Adet</code>
-                  <p className="text-xs text-muted-foreground mt-1">İlk satır başlık olabilir (otomatik atlanır)</p>
-                </div>
+          <TabsContent value="compare" className="mt-3">
+            {/* Instructions (collapsible) */}
+            <Card className="mb-3 py-0 gap-0 border-primary/25 bg-primary/5">
+              <CardContent className="px-3 py-2.5">
+                <details>
+                  <summary className="text-sm font-medium cursor-pointer select-none">
+                    Nasıl kullanılır?
+                  </summary>
+                  <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside mt-2">
+                    <li><strong>Sayımdan önce:</strong> Mevcut stok listenizi CSV olarak yükleyin</li>
+                    <li><strong>Sayım yapın:</strong> "Sayım Listesi" sekmesinden barkodları okutun</li>
+                    <li><strong>Karşılaştırın:</strong> Bu sekmede farklar otomatik hesaplanır</li>
+                  </ol>
+                  <div className="mt-2 p-2 bg-muted rounded-md text-xs">
+                    <span className="font-medium">CSV formatı: </span>
+                    <code>Barkod;Adet</code> veya <code>Barkod,Adet</code>
+                    <span className="text-muted-foreground"> — ilk satır başlık olabilir</span>
+                  </div>
+                </details>
               </CardContent>
             </Card>
 
             {/* Stock Upload Section */}
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Package className="h-5 w-5" />
-                  Mevcut Stok
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-                  <div className="flex-1">
+            <Card className="mb-3 py-0 gap-0">
+              <CardContent className="p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-2 flex-1 min-w-[150px]">
+                    <Package className="h-4 w-4 text-primary shrink-0" />
                     {stockItems.length === 0 ? (
-                      <p className="text-muted-foreground">Karşılaştırma için mevcut stok dosyanızı yükleyin</p>
+                      <p className="text-sm text-muted-foreground">Stok dosyanızı yükleyin</p>
                     ) : (
                       <p className="text-sm">
-                        <span className="font-bold">{stockItems.length}</span> farklı ürün, toplam <span className="font-bold">{stockItems.reduce((s, i) => s + i.quantity, 0)}</span> adet
+                        <span className="font-bold">{stockItems.length}</span> ürün · toplam <span className="font-bold">{stockItems.reduce((s, i) => s + i.quantity, 0)}</span> adet
                       </p>
                     )}
                   </div>
-                  <div className="flex gap-2 flex-wrap">
-                    <Button variant="outline" onClick={downloadSampleCSV}>
-                      <Download className="h-4 w-4 mr-2" />
-                      Örnek CSV
+                  <div className="flex gap-1.5 flex-wrap">
+                    <Button variant="outline" size="sm" className="h-9" onClick={downloadSampleCSV}>
+                      <Download className="h-4 w-4 mr-1.5" />
+                      Örnek
                     </Button>
-                    <Button variant="outline" onClick={() => stockFileInputRef.current?.click()}>
-                      <Upload className="h-4 w-4 mr-2" />
+                    <Button variant="outline" size="sm" className="h-9" onClick={() => stockFileInputRef.current?.click()}>
+                      <Upload className="h-4 w-4 mr-1.5" />
                       Stok CSV Yükle
                     </Button>
                     <input
@@ -1623,7 +1603,7 @@ function InventoryCounterContent() {
                     {stockItems.length > 0 && (
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="outline" size="icon" className="bg-transparent">
+                          <Button variant="ghost" size="icon" className="h-9 w-9 text-destructive">
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </AlertDialogTrigger>
@@ -1648,43 +1628,35 @@ function InventoryCounterContent() {
 
             {/* Comparison Stats */}
             {stockItems.length > 0 && items.length > 0 && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-                <Card className="border-l-4 border-l-green-500">
-                  <CardContent className="py-3">
-                    <p className="text-xs text-muted-foreground">Eşit</p>
-                    <p className="text-xl font-bold text-green-500">{matchCount}</p>
-                  </CardContent>
-                </Card>
-                <Card className="border-l-4 border-l-amber-500">
-                  <CardContent className="py-3">
-                    <p className="text-xs text-muted-foreground">Farklı</p>
-                    <p className="text-xl font-bold text-amber-500">{diffCount}</p>
-                  </CardContent>
-                </Card>
-                <Card className="border-l-4 border-l-red-500">
-                  <CardContent className="py-3">
-                    <p className="text-xs text-muted-foreground">Sayılmadı</p>
-                    <p className="text-xl font-bold text-red-500">{onlyStockCount}</p>
-                  </CardContent>
-                </Card>
-                <Card className="border-l-4 border-l-blue-500">
-                  <CardContent className="py-3">
-                    <p className="text-xs text-muted-foreground">Fazla</p>
-                    <p className="text-xl font-bold text-blue-500">{onlyCountCount}</p>
-                  </CardContent>
-                </Card>
+              <div className="grid grid-cols-4 gap-1.5 sm:gap-2 mb-3">
+                <div className="rounded-lg border border-l-4 border-l-green-500 bg-card px-2 py-1.5">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground leading-tight">Eşit</p>
+                  <p className="text-lg font-bold text-green-600 dark:text-green-400 leading-snug tabular-nums">{matchCount}</p>
+                </div>
+                <div className="rounded-lg border border-l-4 border-l-amber-500 bg-card px-2 py-1.5">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground leading-tight">Farklı</p>
+                  <p className="text-lg font-bold text-amber-600 dark:text-amber-400 leading-snug tabular-nums">{diffCount}</p>
+                </div>
+                <div className="rounded-lg border border-l-4 border-l-red-500 bg-card px-2 py-1.5">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground leading-tight">Sayılmadı</p>
+                  <p className="text-lg font-bold text-red-600 dark:text-red-400 leading-snug tabular-nums">{onlyStockCount}</p>
+                </div>
+                <div className="rounded-lg border border-l-4 border-l-blue-500 bg-card px-2 py-1.5">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground leading-tight">Fazla</p>
+                  <p className="text-lg font-bold text-blue-600 dark:text-blue-400 leading-snug tabular-nums">{onlyCountCount}</p>
+                </div>
               </div>
             )}
 
             {/* Export Comparison */}
             {stockItems.length > 0 && items.length > 0 && (
-              <div className="mb-6 flex gap-2 flex-wrap">
+              <div className="mb-3 flex gap-1.5 flex-wrap">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline">
-                      <Download className="h-4 w-4 mr-2" />
-                      Karşılaştırmayı Dışa Aktar
-                      <ChevronDown className="h-4 w-4 ml-1.5 opacity-60" />
+                    <Button variant="outline" size="sm" className="h-9">
+                      <Download className="h-4 w-4 mr-1.5" />
+                      Dışa Aktar
+                      <ChevronDown className="h-3.5 w-3.5 ml-1 opacity-60" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start">
@@ -1702,8 +1674,8 @@ function InventoryCounterContent() {
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-                <Button variant="outline" onClick={handleShareCompare}>
-                  <Share2 className="h-4 w-4 mr-2" />
+                <Button variant="outline" size="sm" className="h-9" onClick={handleShareCompare}>
+                  <Share2 className="h-4 w-4 mr-1.5" />
                   Paylaş
                 </Button>
               </div>
@@ -1711,68 +1683,61 @@ function InventoryCounterContent() {
 
             {/* Search */}
             {stockItems.length > 0 && (
-              <Card className="mb-6">
-                <CardContent className="py-4">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Barkod ara..."
-                      className="pl-10"
-                    />
-                  </div>
-                </CardContent>
-              </Card>
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Barkod ara..."
+                  className="pl-9 h-10 bg-card"
+                />
+              </div>
             )}
 
             {/* Comparison Table */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Karşılaştırma Sonuçları</CardTitle>
-              </CardHeader>
-              <CardContent>
+            <Card className="py-0 gap-0 overflow-hidden">
+              <CardContent className="p-0">
                 {stockItems.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p className="text-lg">Stok verisi yüklenmedi</p>
-                    <p className="text-sm mt-2">Karşılaştırma için önce stok CSV dosyanızı yükleyin</p>
+                  <div className="text-center py-10 text-muted-foreground">
+                    <Package className="h-10 w-10 mx-auto mb-3 opacity-40" />
+                    <p className="font-medium">Stok verisi yüklenmedi</p>
+                    <p className="text-sm mt-1">Karşılaştırma için önce stok CSV dosyanızı yükleyin</p>
                   </div>
                 ) : items.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <ScanBarcode className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p className="text-lg">Sayım yapılmadı</p>
-                    <p className="text-sm mt-2">Karşılaştırma için barkod okutarak sayım yapın</p>
+                  <div className="text-center py-10 text-muted-foreground">
+                    <ScanBarcode className="h-10 w-10 mx-auto mb-3 opacity-40" />
+                    <p className="font-medium">Sayım yapılmadı</p>
+                    <p className="text-sm mt-1">Karşılaştırma için barkod okutarak sayım yapın</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                  <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
                     <Table>
-                      <TableHeader className="sticky top-0 bg-background">
-                        <TableRow>
-                          <TableHead>Barkod</TableHead>
-                          <TableHead className="text-center">Stok</TableHead>
-                          <TableHead className="text-center">Sayım</TableHead>
-                          <TableHead className="text-center">Fark</TableHead>
-                          <TableHead className="text-right">Durum</TableHead>
+                      <TableHeader className="sticky top-0 bg-card z-10 shadow-[0_1px_0_0_var(--border)]">
+                        <TableRow className="hover:bg-transparent">
+                          <TableHead className="h-9 px-3 text-xs">Barkod</TableHead>
+                          <TableHead className="h-9 text-center text-xs">Stok</TableHead>
+                          <TableHead className="h-9 text-center text-xs">Sayım</TableHead>
+                          <TableHead className="h-9 text-center text-xs">Fark</TableHead>
+                          <TableHead className="h-9 px-3 text-right text-xs">Durum</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {filteredComparison.map((item) => (
-                          <TableRow 
+                          <TableRow
                             key={item.barcode}
                             className={getStatusStyle(item.status)}
                           >
-                            <TableCell className="font-mono">{item.barcode}</TableCell>
-                            <TableCell className="text-center">{item.stockQty || "-"}</TableCell>
-                            <TableCell className="text-center">{item.countQty || "-"}</TableCell>
-                            <TableCell className="text-center font-bold">
-                              {item.status === "match" ? "0" : 
+                            <TableCell className="font-mono text-[13px] px-3 py-1.5">{item.barcode}</TableCell>
+                            <TableCell className="text-center py-1.5 tabular-nums">{item.stockQty || "-"}</TableCell>
+                            <TableCell className="text-center py-1.5 tabular-nums">{item.countQty || "-"}</TableCell>
+                            <TableCell className="text-center font-bold py-1.5 tabular-nums">
+                              {item.status === "match" ? "0" :
                                item.status === "only-stock" ? `-${item.stockQty}` :
                                item.status === "only-count" ? `+${item.countQty}` :
                                (item.countQty - item.stockQty > 0 ? "+" : "") + (item.countQty - item.stockQty)}
                             </TableCell>
-                            <TableCell className="text-right">
+                            <TableCell className="text-right px-3 py-1.5">
                               {getStatusBadge(item.status)}
                             </TableCell>
                           </TableRow>
@@ -1787,7 +1752,7 @@ function InventoryCounterContent() {
         </Tabs>
 
         {/* Footer */}
-        <p className="text-center text-sm text-muted-foreground mt-6">
+        <p className="text-center text-xs text-muted-foreground mt-4">
           Veriler tarayıcınızda otomatik olarak kaydedilir
         </p>
       </div>
