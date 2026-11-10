@@ -16,7 +16,10 @@ CREATE TABLE IF NOT EXISTS stores (
   catalog_version INTEGER NOT NULL DEFAULT 0,
   token_version INTEGER NOT NULL DEFAULT 1,
   email TEXT,
+  phone TEXT,
+  email_verified_at INTEGER,
   cleanup_warned_at INTEGER,
+  last_seen_at INTEGER,
   created_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS sessions (
@@ -67,6 +70,14 @@ const MIGRATIONS: string[] = [
   // v3: iletişim e-postası + hareketsizlik temizliği uyarı damgası
   "ALTER TABLE stores ADD COLUMN email TEXT;\n" +
     "ALTER TABLE stores ADD COLUMN cleanup_warned_at INTEGER",
+  // v4: kötüye kullanım önleme — telefon + e-posta doğrulama damgası
+  // (DİKKAT: uygulanmış bir migrasyon ASLA değiştirilmez; yeni değişiklik
+  // her zaman yeni bir sürüm olarak eklenir.)
+  "ALTER TABLE stores ADD COLUMN phone TEXT;\n" +
+    "ALTER TABLE stores ADD COLUMN email_verified_at INTEGER",
+  // v5: son kullanım damgası — giriş/pano kullanımı da aktivite sayılır,
+  // hareketsizlik temizliği aktif kullanılan mağazayı silemez
+  "ALTER TABLE stores ADD COLUMN last_seen_at INTEGER",
 ]
 const SCHEMA_TARGET = 1 + MIGRATIONS.length
 

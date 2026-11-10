@@ -51,6 +51,7 @@ export async function runCleanup(
       `SELECT s.id, s.name, s.code, s.email, s.cleanup_warned_at,
          MAX(
            s.created_at,
+           COALESCE(s.last_seen_at, 0),
            COALESCE((SELECT MAX(received_at) FROM scan_events e WHERE e.store_id = s.id), 0),
            COALESCE((SELECT MAX(created_at) FROM sessions x WHERE x.store_id = s.id), 0)
          ) AS lastActivity
@@ -58,11 +59,21 @@ export async function runCleanup(
     )
     .all() as StoreActivityRow[]
 
+  // GARANTİ: hiçbir mağaza uyarılmadan silinmez; silme, uyarıdan en az
+  // 7 gün SONRA olur. Giriş yapmak / panoya bakmak da aktivitedir
+  // (last_seen_at), yani uyarı mailindeki "giriş yapman yeterli" sözü doğrudur.
+  const warnThreshold = Math.max(0, days - WARN_BEFORE_DAYS) * DAY
   let deleted = 0
   let warned = 0
   for (const row of rows) {
     const idleMs = now - row.lastActivity
-    if (idleMs > days * DAY) {
+    const warnedInPeriod =
+      row.cleanup_warned_at !== null && row.cleanup_warned_at >= row.lastActivity
+    if (
+      idleMs > days * DAY &&
+      warnedInPeriod &&
+      now - (row.cleanup_warned_at as number) >= WARN_BEFORE_DAYS * DAY
+    ) {
       await mail(
         row.email,
         `Stokzen: "${row.name}" mağazası silindi`,
@@ -72,22 +83,17 @@ export async function runCleanup(
       )
       deleteStore(db, row.id)
       deleted++
-    } else if (idleMs > (days - WARN_BEFORE_DAYS) * DAY) {
-      // Bu hareketsizlik döneminde daha önce uyarıldıysa tekrar gönderme
-      const alreadyWarned =
-        row.cleanup_warned_at !== null && row.cleanup_warned_at >= row.lastActivity
-      if (!alreadyWarned) {
-        await mail(
-          row.email,
-          `Stokzen: "${row.name}" mağazası yakında silinecek`,
-          `"${row.name}" (kod ${row.code}) mağazası bir süredir kullanılmıyor.\n` +
-            `${WARN_BEFORE_DAYS} gün içinde giriş yapılmazsa tüm verileriyle ` +
-            `birlikte otomatik silinecek.\n\nSilinmesini istemiyorsan mağazana ` +
-            `giriş yapman yeterli.`
-        )
-        db.prepare("UPDATE stores SET cleanup_warned_at = ? WHERE id = ?").run(now, row.id)
-        warned++
-      }
+    } else if (idleMs > warnThreshold && !warnedInPeriod) {
+      await mail(
+        row.email,
+        `Stokzen: "${row.name}" mağazası yakında silinecek`,
+        `"${row.name}" (kod ${row.code}) mağazası bir süredir kullanılmıyor.\n` +
+          `${WARN_BEFORE_DAYS} gün içinde giriş yapılmazsa tüm verileriyle ` +
+          `birlikte otomatik silinecek.\n\nSilinmesini istemiyorsan mağazana ` +
+          `giriş yapman yeterli.`
+      )
+      db.prepare("UPDATE stores SET cleanup_warned_at = ? WHERE id = ?").run(now, row.id)
+      warned++
     }
   }
   return { deleted, warned }

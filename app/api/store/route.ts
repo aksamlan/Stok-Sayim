@@ -1,6 +1,8 @@
+import { ApiError } from "@/lib/server/auth"
 import { getDb } from "@/lib/server/db"
 import { handle, json, readBody } from "@/lib/server/http"
-import { sendMail } from "@/lib/server/mail"
+import { mailConfigured, sendMail } from "@/lib/server/mail"
+import { normalizePhone, verifyEmailCode } from "@/lib/server/verify"
 import { rateLimitOrThrow } from "@/lib/server/ratelimit"
 import { createStore, joinStore } from "@/lib/server/stores"
 
@@ -11,15 +13,42 @@ export const POST = handle(async (req) => {
     countPassword: string
     adminPassword: string
     email?: string
+    phone?: string
+    verifyToken?: string
+    verifyCode?: string
   }>(req)
   const db = getDb()
+  // Kötüye kullanım önleme: e-posta + telefon zorunlu; SMTP ayarlıysa
+  // e-postaya gönderilen 6 haneli kod doğrulanmadan mağaza AÇILMAZ.
+  const email = (body.email ?? "").trim()
+  if (!email) throw new ApiError(400, "E-posta adresi gerekli")
+  const phone = normalizePhone(body.phone ?? "")
+  if (!phone) throw new ApiError(400, "Geçerli bir telefon numarası gir (örn. 0555 111 22 33)")
+  let emailVerified = false
+  if (mailConfigured()) {
+    if (
+      !body.verifyToken ||
+      !body.verifyCode ||
+      !verifyEmailCode(db, body.verifyToken, email, body.verifyCode)
+    ) {
+      throw new ApiError(400, "E-posta doğrulama kodu hatalı ya da süresi dolmuş")
+    }
+    emailVerified = true
+  }
   const { code } = createStore(
     db,
     body.name ?? "",
     body.countPassword ?? "",
     body.adminPassword ?? "",
-    body.email
+    email,
+    phone
   )
+  if (emailVerified) {
+    db.prepare("UPDATE stores SET email_verified_at = ? WHERE code = ?").run(
+      Date.now(),
+      code
+    )
+  }
   const joined = joinStore(db, code, body.adminPassword, "", "")
   // Hoş geldin maili (SMTP ayarlıysa); başarısızlık kurulumu etkilemez.
   void sendMail(

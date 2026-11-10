@@ -22,7 +22,8 @@ export function createStore(
   name: string,
   countPassword: string,
   adminPassword: string,
-  email?: string
+  email?: string,
+  phone?: string
 ): { storeId: string; code: string } {
   if (!name.trim()) throw new ApiError(400, "Mağaza adı gerekli")
   if (countPassword.length < 4 || adminPassword.length < 4) {
@@ -34,7 +35,7 @@ export function createStore(
   }
   const storeId = randomUUID()
   const insert = db.prepare(
-    "INSERT INTO stores (id, code, name, count_pw_hash, admin_pw_hash, email, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    "INSERT INTO stores (id, code, name, count_pw_hash, admin_pw_hash, email, phone, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
   )
   for (let attempt = 0; attempt < 10; attempt++) {
     const code = randomCode()
@@ -46,6 +47,7 @@ export function createStore(
         hashPassword(countPassword),
         hashPassword(adminPassword),
         cleanEmail,
+        phone?.trim() || null,
         Date.now()
       )
       return { storeId, code }
@@ -80,7 +82,13 @@ export function joinStore(
     .get(code.trim().toUpperCase()) as StoreRow | undefined
   if (!row) throw new ApiError(401, "Kod veya şifre hatalı")
   const exp = Date.now() + TOKEN_TTL_MS
+  // Giriş aktivitedir: temizlik sayacı sıfırlanır (uyarı maili "giriş yapman
+  // yeterli" diyor — bu söz burada tutuluyor).
+  const markSeen = () => {
+    db.prepare("UPDATE stores SET last_seen_at = ? WHERE id = ?").run(Date.now(), row.id)
+  }
   if (verifyPassword(password, row.admin_pw_hash)) {
+    markSeen()
     const token = signToken(db, {
       storeId: row.id,
       role: "admin",
@@ -116,6 +124,7 @@ export function joinStore(
         "INSERT INTO counters (store_id, name, pin_hash, created_at) VALUES (?, ?, ?, ?)"
       ).run(row.id, counter, hashPassword(pin.trim()), generation)
     }
+    markSeen()
     const token = signToken(db, {
       storeId: row.id,
       role: "counter",

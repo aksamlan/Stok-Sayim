@@ -21,6 +21,9 @@ export async function sendMail(
       port,
       secure: port === 465,
       auth: user ? { user, pass: process.env.SMTP_PASS ?? "" } : undefined,
+      // Cevapsız SMTP sunucusu temizlik taramasını dakikalarca asmasın
+      connectionTimeout: 10000,
+      socketTimeout: 15000,
     })
     await transport.sendMail({
       from: process.env.SMTP_FROM ?? user ?? "stokzen@localhost",

@@ -26,7 +26,11 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { apiCreateStore, apiJoinStore } from "@/lib/store-client/api"
+import {
+  apiCreateStore,
+  apiJoinStore,
+  apiStartVerification,
+} from "@/lib/store-client/api"
 import { clearAuth, loadAuth, saveAuth } from "@/lib/store-client/session"
 import type { StoreAuth } from "@/lib/store-client/types"
 import { useDarkMode } from "@/lib/store-client/use-dark-mode"
@@ -44,6 +48,10 @@ export default function MagazaPage() {
 
   const [newName, setNewName] = useState("")
   const [newEmail, setNewEmail] = useState("")
+  const [newPhone, setNewPhone] = useState("")
+  // E-posta doğrulama adımı (SMTP ayarlıysa): kod istenir
+  const [verifyToken, setVerifyToken] = useState<string | null>(null)
+  const [verifyCode, setVerifyCode] = useState("")
   const [countPw, setCountPw] = useState("")
   const [adminPw, setAdminPw] = useState("")
   const [adminPw2, setAdminPw2] = useState("")
@@ -96,11 +104,24 @@ export default function MagazaPage() {
     }
     setBusy(true)
     try {
+      // Doğrulama gerekiyorsa önce e-postaya kod gönder, kod adımına geç
+      if (verifyToken === null) {
+        const v = await apiStartVerification(newEmail)
+        if (v.required && v.token) {
+          setVerifyToken(v.token)
+          toast.info("Doğrulama kodu e-postana gönderildi")
+          setBusy(false)
+          return
+        }
+      }
       const res = await apiCreateStore({
         name: newName,
         countPassword: countPw,
         adminPassword: adminPw,
         email: newEmail,
+        phone: newPhone,
+        verifyToken: verifyToken ?? undefined,
+        verifyCode: verifyCode || undefined,
       })
       saveAuth({
         token: res.token,
@@ -341,20 +362,37 @@ export default function MagazaPage() {
                           required
                         />
                       </div>
-                      <div className="space-y-1">
-                        <label className="text-xs font-medium text-muted-foreground">
-                          E-posta
-                        </label>
-                        <Input
-                          type="email"
-                          value={newEmail}
-                          onChange={(e) => setNewEmail(e.target.value)}
-                          placeholder="ornek@eposta.com"
-                          className="h-11"
-                          required
-                        />
-                        <p className="text-[11px] text-muted-foreground">
-                          Mağaza bilgileri ve silinme uyarıları bu adrese gider.
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-muted-foreground">
+                            E-posta
+                          </label>
+                          <Input
+                            type="email"
+                            value={newEmail}
+                            onChange={(e) => setNewEmail(e.target.value)}
+                            placeholder="ornek@eposta.com"
+                            className="h-11"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-muted-foreground">
+                            Telefon
+                          </label>
+                          <Input
+                            type="tel"
+                            value={newPhone}
+                            onChange={(e) => setNewPhone(e.target.value)}
+                            placeholder="0555 111 22 33"
+                            className="h-11"
+                            inputMode="tel"
+                            required
+                          />
+                        </div>
+                        <p className="sm:col-span-2 text-[11px] text-muted-foreground">
+                          Mağaza bilgileri ve silinme uyarıları e-postana gider;
+                          iletişim bilgileri kötüye kullanımı önlemek içindir.
                         </p>
                       </div>
                       <div className="space-y-1">
@@ -398,9 +436,41 @@ export default function MagazaPage() {
                           />
                         </div>
                       </div>
+                      {verifyToken !== null && (
+                        <div className="space-y-1 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                          <label className="text-xs font-medium text-muted-foreground">
+                            E-postana gelen 6 haneli doğrulama kodu
+                          </label>
+                          <Input
+                            value={verifyCode}
+                            onChange={(e) =>
+                              setVerifyCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                            }
+                            placeholder="123456"
+                            className="h-11 font-mono tracking-[0.3em] text-center"
+                            inputMode="numeric"
+                            autoFocus
+                            required
+                          />
+                          <button
+                            type="button"
+                            className="text-[11px] text-primary underline underline-offset-2"
+                            onClick={() => {
+                              setVerifyToken(null)
+                              setVerifyCode("")
+                            }}
+                          >
+                            Kod gelmedi mi? Bilgileri düzeltip tekrar gönder
+                          </button>
+                        </div>
+                      )}
                       <Button type="submit" className="w-full h-11" disabled={busy}>
                         <Store className="h-4 w-4 mr-1" />
-                        {busy ? "Oluşturuluyor..." : "Mağazayı Oluştur"}
+                        {busy
+                          ? "Oluşturuluyor..."
+                          : verifyToken !== null
+                            ? "Kodu Doğrula ve Mağazayı Oluştur"
+                            : "Mağazayı Oluştur"}
                       </Button>
                     </form>
                   </CardContent>

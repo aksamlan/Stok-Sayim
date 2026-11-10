@@ -69,8 +69,17 @@ export function apiCreateStore(body: {
   countPassword: string
   adminPassword: string
   email?: string
+  phone?: string
+  verifyToken?: string
+  verifyCode?: string
 }): Promise<JoinResult & { code: string }> {
   return request("/api/store", { method: "POST", body })
+}
+
+export function apiStartVerification(
+  email: string
+): Promise<{ required: boolean; token?: string }> {
+  return request("/api/store/dogrulama", { method: "POST", body: { email } })
 }
 
 export function apiJoinStore(body: {

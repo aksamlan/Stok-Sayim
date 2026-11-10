@@ -41,6 +41,8 @@ export type StoreOverview = {
   code: string
   name: string
   email: string | null
+  phone: string | null
+  emailVerifiedAt: number | null
   createdAt: number
   catalogCount: number
   sessionCount: number
@@ -56,7 +58,8 @@ export function overview(db: DatabaseSync): {
 } {
   const stores = db
     .prepare(
-      `SELECT s.id, s.code, s.name, s.email, s.created_at AS createdAt,
+      `SELECT s.id, s.code, s.name, s.email, s.phone,
+        s.email_verified_at AS emailVerifiedAt, s.created_at AS createdAt,
         (SELECT COUNT(*) FROM products p WHERE p.store_id = s.id) AS catalogCount,
         (SELECT COUNT(*) FROM sessions x WHERE x.store_id = s.id) AS sessionCount,
         (SELECT COUNT(DISTINCT counter) FROM scan_events e WHERE e.store_id = s.id) AS counterCount,

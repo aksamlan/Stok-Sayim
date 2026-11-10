@@ -23,8 +23,20 @@ export function openIdb(storeId: string): Promise<IDBDatabase> {
         db.createObjectStore("dead", { keyPath: "id" })
       }
     }
-    req.onsuccess = () => resolve(req.result)
+    req.onsuccess = () => {
+      const db = req.result
+      // Başka sekme sürüm yükseltirse bu bağlantı kapanmalı ki yükseltme
+      // sonsuza dek bloklanmasın.
+      db.onversionchange = () => db.close()
+      resolve(db)
+    }
     req.onerror = () => reject(req.error)
+    // Eski sürümü açık tutan başka bir sekme yükseltmeyi bloklarsa sonsuza
+    // dek bekleme: anlaşılır bir hatayla çık (çağıran taraf kullanıcıya söyler).
+    req.onblocked = () =>
+      reject(
+        new Error("Depolama başka bir sekme tarafından kilitli — diğer sekmeleri kapatıp yenile")
+      )
   })
 }
 

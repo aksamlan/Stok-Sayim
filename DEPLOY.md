@@ -21,6 +21,7 @@ Repo gizli olduğu için sunucuya **sadece okuma** yetkili bir deploy key ekleye
 Sunucuda anahtar üret:
 
 ```bash
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
 ssh-keygen -t ed25519 -C "stok-sunucu" -f ~/.ssh/stok_deploy -N ""
 cat ~/.ssh/stok_deploy.pub
 ```
@@ -95,6 +96,22 @@ ya da 0 yapıp kapatabilirsin.
 2. Cloudflare → **SSL/TLS** → mod: **Full (strict)**.
    (Caddy sunucuda gerçek sertifika aldığı için Full (strict) sorunsuz çalışır.)
 3. 1-2 dakika içinde `https://stok.alanadin.com` açılır.
+4. Kurulum scripti "Cloudflare kullanacak mısın?" diye sorar; **evet** dersen
+   hız limiti gerçek ziyaretçi IP'sini Cloudflare başlığından okur. Bu durumda
+   80/443 portlarını yalnız Cloudflare IP aralıklarına açman önerilir
+   (listeler: cloudflare.com/ips). Örnek:
+
+   ```bash
+   for ip in $(curl -s https://www.cloudflare.com/ips-v4); do sudo ufw allow from $ip to any port 80,443 proto tcp; done
+   sudo ufw deny 80/tcp; sudo ufw deny 443/tcp   # kural sırası: önce izinler
+   ```
+
+> **ÖNEMLİ — Cloudflare önbellek uyarısı:** Cloudflare'de "Cache Everything"
+> kuralı AÇMA. Açarsan `/api/*` yanıtları (yetkili veriler!) uçta önbelleğe
+> alınıp kullanıcılar arasında sızabilir. Uygulama `/api/*` için `no-store`
+> başlığı gönderir ve varsayılan Cloudflare ayarları güvenlidir; yine de
+> istersen `/api/*` için "Bypass cache" kuralı ekleyebilirsin. Rocket Loader
+> da kapalı kalsın.
 
 > Not: Proxy açıkken Caddy'nin ilk sertifika alması için kuruluma başlamadan
 > DNS kaydını eklemiş olman iyi olur. Sertifika alınamazsa bulutu geçici olarak
@@ -132,6 +149,16 @@ Menüden **8** anında güvenli yedek alır (`~/stok-yedek-TARIH.tar.gz`).
 SQLite'ın çevrimiçi yedeğini (VACUUM INTO) kullanır — servis çalışırken bile
 tutarlıdır.
 
+**Geri yükleme:**
+
+```bash
+sudo systemctl stop stok-sayim
+tar xzf ~/stok-yedek-TARIH.tar.gz -C /tmp
+mv /tmp/yedek-anlik.db ~/stok-sayim/data/stok.db
+rm -f ~/stok-sayim/data/stok.db-wal ~/stok-sayim/data/stok.db-shm
+sudo systemctl start stok-sayim
+```
+
 Günlük otomatik yedek için:
 
 ```bash
@@ -162,6 +189,36 @@ docker compose up -d --build
 ```
 
 Veriler yine `./data` klasöründe kalır. Alan adı için önüne Caddy/Nginx koy.
+
+## Caddy yerine Nginx kullanacaksan
+
+```nginx
+# /etc/nginx/sites-available/stok-sayim
+server {
+    listen 80;
+    listen [::]:80;
+    server_name stok.alanadin.com;
+
+    # Katalog yüklemesi ~8 MB JSON gönderir; nginx varsayılanı 1 MB (413 verir).
+    client_max_body_size 20m;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        # ŞART: hız limiti istemci IP'sini X-Forwarded-For'un SON girdisinden okur.
+        # Bu satır olmadan tüm kullanıcılar tek kovayı paylaşır (girişler kilitlenir).
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;
+    }
+}
+```
+
+HTTPS için certbot (`sudo certbot --nginx`) ya da Cloudflare Origin
+sertifikası kullan. Nginx'te uygulamayı 127.0.0.1'e bağlamak için
+`/etc/stok-sayim.env` dosyasına elle `STOK_BIND_ARGS=-H 127.0.0.1` satırını
+ekleyip servisi yeniden başlat.
 
 ## Sık sorulanlar
 

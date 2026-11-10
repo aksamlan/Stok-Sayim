@@ -48,11 +48,14 @@ env_dosyasi_hazirla() {
 
 env_ayarla() { # env_ayarla ANAHTAR değer  → ENV_FILE içinde ekler/değiştirir
   env_dosyasi_hazirla
-  local key="$1" value="$2"
+  local key="$1" value="$2" old_umask
+  old_umask="$(umask)"
+  umask 077  # geçici dosya da dahil hiçbir an dünya-okunur olmasın (SMTP şifresi!)
   grep -v "^${key}=" "$ENV_FILE" > "${ENV_FILE}.tmp" || true
   printf '%s=%s\n' "$key" "$value" >> "${ENV_FILE}.tmp"
   mv "${ENV_FILE}.tmp" "$ENV_FILE"
   chmod 600 "$ENV_FILE"
+  umask "$old_umask"
 }
 
 node_kur() {
@@ -101,7 +104,7 @@ Environment=NODE_ENV=production
 Environment=DATA_DIR=$REPO_DIR/data
 Environment=PORT=3000
 EnvironmentFile=-$ENV_FILE
-ExecStart=$pnpm_bin start -- \$STOK_BIND_ARGS
+ExecStart=$pnpm_bin start \$STOK_BIND_ARGS
 Restart=always
 RestartSec=3
 
@@ -147,8 +150,22 @@ CADDYEOF
   zorunlu systemctl reload caddy || zorunlu systemctl restart caddy || return 1
   adim "Uygulama yalnız 127.0.0.1'e bağlanıyor (dışarıdan sadece Caddy/HTTPS erişir)"
   env_ayarla STOK_BIND_ARGS "-H 127.0.0.1"
+  echo
+  read -r -p "Cloudflare proxy (turuncu bulut) kullanacak mısın? [e/H]: " cfyn
+  if [ "${cfyn:-H}" = "e" ] || [ "${cfyn:-H}" = "E" ]; then
+    # Hız limiti gerçek ziyaretçi IP'sini CF-Connecting-IP'den okur.
+    # Güvenli olması için 80/443'ü yalnız Cloudflare IP aralıklarına açman önerilir (DEPLOY.md).
+    env_ayarla TRUST_CF_HEADER "1"
+    echo "Cloudflare gerçek-IP desteği açıldı (TRUST_CF_HEADER=1)."
+  fi
   if [ -f "/etc/systemd/system/$SERVICE.service" ]; then
     zorunlu systemctl restart "$SERVICE" || return 1
+    sleep 2
+    if ! systemctl is-active --quiet "$SERVICE"; then
+      hata "Servis alan adı ayarından sonra başlamadı! Log: journalctl -u $SERVICE -n 30"
+      journalctl -u "$SERVICE" -n 15 --no-pager || true
+      return 1
+    fi
   fi
   basari "Alan adı bağlandı: https://$domain"
   echo "  Cloudflare: DNS'te A kaydı -> sunucu IP'si, SSL/TLS modu Full (strict)."

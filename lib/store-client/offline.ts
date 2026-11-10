@@ -188,7 +188,8 @@ export async function processQueue(
   events: QueuedEvent[],
   post: (batch: QueuedEvent[]) => Promise<void>,
   remove: (ids: string[]) => Promise<void>,
-  stash?: (events: QueuedEvent[]) => Promise<void>
+  stash?: (events: QueuedEvent[]) => Promise<void>,
+  batchSize = 500
 ): Promise<DrainResult> {
   const bySession = new Map<string, QueuedEvent[]>()
   for (const e of events) {
@@ -198,9 +199,10 @@ export async function processQueue(
   }
   const result: DrainResult = { posted: 0, dropped: 0, authExpired: false }
   for (const [, group] of bySession) {
+    let i = 0
     try {
-      for (let i = 0; i < group.length; i += 500) {
-        const batch = group.slice(i, i + 500)
+      for (; i < group.length; i += batchSize) {
+        const batch = group.slice(i, i + batchSize)
         await post(batch)
         await remove(batch.map((e) => e.id))
         result.posted += batch.length
@@ -211,9 +213,12 @@ export async function processQueue(
         break
       }
       if (e instanceof ApiHttpError && (e.status === 409 || e.status === 404)) {
-        await stash?.(group)
-        await remove(group.map((x) => x.id))
-        result.dropped += group.length
+        // YALNIZ gönderilememiş kalan kısım emanete gider; önceki partiler
+        // sunucuya ulaştı — onları da emanete koymak çift sayım yaratırdı.
+        const remaining = group.slice(i)
+        await stash?.(remaining)
+        await remove(remaining.map((x) => x.id))
+        result.dropped += remaining.length
         continue
       }
       // Ağ/sunucu hatası: bu grubun olayları kuyrukta kalsın, diğer gruplara geç

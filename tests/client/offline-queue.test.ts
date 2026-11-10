@@ -40,6 +40,33 @@ test("closed-session group (409) is stashed then dropped, other groups still pos
   expect(result.authExpired).toBe(false)
 })
 
+test("mid-group 409 stashes only the unposted remainder (no double count)", async () => {
+  const events = [ev("a1", "s1"), ev("a2", "s1"), ev("a3", "s1")]
+  let calls = 0
+  const stashed: string[][] = []
+  const removed: string[][] = []
+  const result = await processQueue(
+    events,
+    async () => {
+      calls++
+      // ilk parti (a1) başarıyla gider; sayım tam o anda kapatılır
+      if (calls > 1) throw new ApiHttpError(409, "Bu sayım kapatılmış")
+    },
+    async (ids) => {
+      removed.push(ids)
+    },
+    async (evts) => {
+      stashed.push(evts.map((e) => e.id))
+    },
+    1 // test için parti boyutu 1
+  )
+  expect(result.posted).toBe(1)
+  expect(result.dropped).toBe(2)
+  // a1 sunucuda — emanete GİRMEMELİ; yalnız a2+a3 kurtarma CSV'sine düşer
+  expect(stashed.flat().sort()).toEqual(["a2", "a3"])
+  expect(removed.flat().sort()).toEqual(["a1", "a2", "a3"])
+})
+
 test("network error keeps events queued and is not a drop", async () => {
   const removed: string[][] = []
   const result = await processQueue(

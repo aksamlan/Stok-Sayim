@@ -41,7 +41,7 @@ export function verifyPassword(pw: string, hash: string): boolean {
   return timingSafeEqual(actual, expected)
 }
 
-function getSecret(db: DatabaseSync): Buffer {
+export function getSecret(db: DatabaseSync): Buffer {
   let secret = getMeta(db, "secret")
   if (!secret) {
     secret = randomBytes(32).toString("hex")
@@ -103,6 +103,12 @@ export function requireAuth(
     if (!store || (payload.tv ?? 1) !== store.token_version) {
       throw new ApiError(401, "Oturum geçersiz, tekrar giriş yap")
     }
+    // Kullanım = aktivite: hareketsizlik temizliği panoya bakan/giriş yapan
+    // mağazayı asla silmesin. Saatte bir güncellenir (çoğu istekte no-op).
+    const now = Date.now()
+    db.prepare(
+      "UPDATE stores SET last_seen_at = ? WHERE id = ? AND (last_seen_at IS NULL OR last_seen_at < ?)"
+    ).run(now, payload.storeId, now - 3600000)
     if (payload.role === "counter") {
       const counterRow = db
         .prepare("SELECT created_at FROM counters WHERE store_id = ? AND name = ?")

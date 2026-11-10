@@ -68,6 +68,7 @@ async function main() {
       countPassword: "say1234",
       adminPassword: "admin1234",
       email: "yuk-testi@ornek.com",
+      phone: "05550001122",
     },
   })
   const admin = store.token
@@ -293,5 +294,11 @@ async function main() {
 
 main().catch((e) => {
   console.error("Yük testi hata ile durdu:", e.message)
+  if (/doğrulama/i.test(String(e.message))) {
+    console.error(
+      "İpucu: SMTP ayarlı sunucularda mağaza kurmak e-posta doğrulaması ister;" +
+        " yük testini SMTP kapalıyken ya da yerelde çalıştır."
+    )
+  }
   process.exit(1)
 })

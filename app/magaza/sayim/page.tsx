@@ -134,7 +134,9 @@ export default function SayimPage() {
         setCatalogReady(true)
         toast.error("Katalog yüklenemedi", {
           description:
-            "Ürün adları gösterilemeyebilir. Bağlantını kontrol edip sayfayı yenile.",
+            err instanceof Error && err.message.includes("sekme")
+              ? err.message
+              : "Ürün adları gösterilemeyebilir. Bağlantını kontrol edip sayfayı yenile.",
           duration: 8000,
         })
       }

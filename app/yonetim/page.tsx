@@ -56,6 +56,8 @@ type StoreRow = {
   code: string
   name: string
   email: string | null
+  phone: string | null
+  emailVerifiedAt: number | null
   createdAt: number
   catalogCount: number
   sessionCount: number
@@ -334,7 +336,15 @@ export default function YonetimPage() {
                                 {s.email && (
                                   <span className="font-sans"> · {s.email}</span>
                                 )}
+                                {s.phone && (
+                                  <span className="font-sans"> · {s.phone}</span>
+                                )}
                               </p>
+                              {s.email && !s.emailVerifiedAt && (
+                                <Badge variant="outline" className="mt-0.5 bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30">
+                                  e-posta doğrulanmadı
+                                </Badge>
+                              )}
                             </TableCell>
                             <TableCell className="py-1.5 text-right tabular-nums">
                               {s.catalogCount.toLocaleString("tr-TR")}

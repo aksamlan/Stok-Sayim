@@ -7,4 +7,6 @@ services:
       - "127.0.0.1:3000:3000"
     volumes:
       - ./data:/app/data
+    # E-posta (SMTP) kullanacaksan bu satırı aç ve dosyayı oluştur:
+    # env_file: /etc/stok-sayim.env
     restart: unless-stopped
