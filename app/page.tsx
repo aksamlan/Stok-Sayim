@@ -4,6 +4,7 @@ import React, { Suspense, useState, useEffect, useRef, useCallback } from "react
 import Link from "next/link"
 import { Plus, Minus, Trash2, Download, Upload, Moon, Sun, Search, Volume2, VolumeX, RotateCcw, Camera, ScanBarcode, Package, AlertTriangle, CheckCircle2, XCircle, Zap, ClipboardList, Pencil, PlusCircle, Delete, ImageUp, Share2, FileSpreadsheet, FileText, Printer, ChevronDown, Store } from "lucide-react"
 import { Toaster, toast } from "sonner"
+import { PoweredByStokzen } from "@/components/stokzen"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -973,7 +974,10 @@ function InventoryCounterContent() {
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
               <ScanBarcode className="h-4 w-4" />
             </span>
-            Stok Sayım
+            <span>
+              Stok<span className="text-primary">zen</span>
+            </span>
+            <span className="hidden sm:inline text-muted-foreground font-medium">Stok Sayım</span>
           </h1>
           <div className="flex gap-1">
             <Button
@@ -1768,6 +1772,7 @@ function InventoryCounterContent() {
         <p className="text-center text-xs text-muted-foreground mt-4">
           Veriler tarayıcınızda otomatik olarak kaydedilir
         </p>
+        <PoweredByStokzen />
       </div>
     </div>
   )

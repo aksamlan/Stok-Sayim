@@ -8,9 +8,10 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'Stok Sayım - Barkod ile Envanter Sayımı',
-  description: 'Barkod okuyucu ile hızlı stok sayımı yapın ve Excel/CSV çıktısı alın',
-  generator: 'v0.app',
+  title: 'Stokzen Stok Sayım - Barkod ile Envanter Sayımı',
+  description:
+    'Stokzen ile barkod okutarak tek başına veya ekipçe stok sayımı yapın; Excel/CSV/PDF çıktısı alın.',
+  applicationName: 'Stokzen Stok Sayım',
   icons: {
     icon: [
       {
