@@ -163,11 +163,56 @@ export default function SayimPage() {
     }
   }, [router])
 
-  // Arka plan senkronu
+  // Arka plan senkronu + kapatılmış sayıma gidemeyen okutma uyarısı
+  const lastDroppedRef = useRef(0)
   useEffect(() => {
     if (!auth) return
-    const stop = startSync(auth, setSync)
+    const stop = startSync(auth, (s) => {
+      setSync(s)
+      const dropped = s.droppedTotal ?? 0
+      if (dropped > lastDroppedRef.current) {
+        const diff = dropped - lastDroppedRef.current
+        lastDroppedRef.current = dropped
+        toast.warning(`${diff} okutma gönderilemedi`, {
+          description:
+            "Ait olduğu sayım kapatılmış. Yönetici yeni sayım başlattıysa sayfa birazdan ona geçer.",
+          duration: 8000,
+        })
+      }
+    })
     return stop
+  }, [auth])
+
+  // Aktif sayımı düzenli kontrol et: yönetici kapatır/yenisini açarsa otomatik geç
+  useEffect(() => {
+    if (!auth) return
+    const check = async () => {
+      let active: { id: string; name: string } | null = null
+      try {
+        const { sessions } = await apiSessions(auth.token)
+        const found = sessions.find((s) => s.status === "active")
+        active = found ? { id: found.id, name: found.name } : null
+      } catch {
+        return // çevrimdışı: mevcut oturumla devam
+      }
+      const current = sessionRef.current
+      if (active && active.id !== current?.id) {
+        setSession(active)
+        setNoSession(false)
+        void rememberSession(auth.storeId, active.id, active.name)
+        setItems(await getMine(auth.storeId, active.id))
+        setLastScan(null)
+        toast.info(`Yeni sayıma geçildi: ${active.name}`)
+      } else if (!active && current) {
+        setSession(null)
+        setNoSession(true)
+        toast.warning("Yönetici sayımı kapattı")
+      }
+    }
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") void check()
+    }, 30000)
+    return () => clearInterval(interval)
   }, [auth])
 
   const focusInput = useCallback(() => {

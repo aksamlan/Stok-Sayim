@@ -57,10 +57,15 @@ derle() {
 }
 
 servis_kur() {
+  # BIND_LOCALHOST=1 ile çağrılırsa uygulama yalnız 127.0.0.1'i dinler
+  # (alan adı + Caddy varken dışarıya 3000 portu açık kalmasın diye).
   adim "systemd servisi yazılıyor ($SERVICE)"
-  local pnpm_bin
+  local pnpm_bin bind_env=""
   pnpm_bin="$(command -v pnpm || true)"
   [ -z "$pnpm_bin" ] && pnpm_bin="/usr/bin/corepack pnpm"
+  if [ -n "${BIND_LOCALHOST:-}" ]; then
+    bind_env="Environment=HOSTNAME=127.0.0.1"
+  fi
   cat > "/etc/systemd/system/$SERVICE.service" <<SERVICEEOF
 [Unit]
 Description=Stokzen Stok Sayim
@@ -73,6 +78,7 @@ WorkingDirectory=$REPO_DIR
 Environment=NODE_ENV=production
 Environment=DATA_DIR=$REPO_DIR/data
 Environment=PORT=3000
+$bind_env
 ExecStart=$pnpm_bin start
 Restart=always
 RestartSec=3
@@ -81,7 +87,8 @@ RestartSec=3
 WantedBy=multi-user.target
 SERVICEEOF
   systemctl daemon-reload
-  systemctl enable --now "$SERVICE"
+  systemctl enable "$SERVICE"
+  systemctl restart "$SERVICE"
   sleep 2
   systemctl --no-pager status "$SERVICE" | head -6 || true
 }
@@ -113,6 +120,10 @@ $domain {
 }
 CADDYEOF
   systemctl reload caddy || systemctl restart caddy
+  if [ -f "/etc/systemd/system/$SERVICE.service" ]; then
+    adim "Uygulama yalnız 127.0.0.1'e bağlanıyor (dışarıdan sadece Caddy/HTTPS erişir)"
+    BIND_LOCALHOST=1 servis_kur
+  fi
   basari "Alan adı bağlandı: https://$domain"
   echo "  Cloudflare kullanıyorsan: DNS'te A kaydı -> bu sunucunun IP'si,"
   echo "  SSL/TLS modu: Full (strict). Detay: DEPLOY.md bölüm 5."

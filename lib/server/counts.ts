@@ -61,7 +61,9 @@ export function recordEvents(
       e.sessionId !== sessionId ||
       typeof e.barcode !== "string" ||
       !e.barcode ||
-      !Number.isInteger(e.qty)
+      !Number.isInteger(e.qty) ||
+      typeof e.createdAt !== "number" ||
+      !Number.isFinite(e.createdAt)
     ) {
       throw new ApiError(400, "Geçersiz sayım verisi")
     }

@@ -134,6 +134,24 @@ test("closed session rejects events", () => {
   }
 })
 
+test("invalid createdAt rejected with 400", () => {
+  const { db, storeId, sessionId } = setup()
+  try {
+    recordEvents(db, storeId, "Ali", [
+      {
+        id: "bad1",
+        sessionId,
+        barcode: "869001",
+        qty: 1,
+        createdAt: "sprintf" as unknown as number,
+      },
+    ])
+    expect.unreachable()
+  } catch (e) {
+    expect((e as ApiError).status).toBe(400)
+  }
+})
+
 test("pagination reports rowTotal", () => {
   const { db, storeId, sessionId } = setup()
   const d = dashboard(db, storeId, sessionId, { filter: "all", page: 1, pageSize: 2 })

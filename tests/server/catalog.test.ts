@@ -54,6 +54,19 @@ test("leading-zero barcode stays string", () => {
   expect(getCatalog(db, storeId).items?.[0].barcode).toBe("0012345")
 })
 
+test("non-numeric expected is stored as null (no stored XSS)", () => {
+  const { db, storeId } = setup()
+  replaceCatalog(db, storeId, [
+    {
+      barcode: "1",
+      name: "x",
+      category: null,
+      expected: "<img src=x onerror=alert(1)>" as unknown as number,
+    },
+  ])
+  expect(getCatalog(db, storeId).items?.[0].expected).toBeNull()
+})
+
 test("bulk 20k rows under 3s", () => {
   const { db, storeId } = setup()
   const items: CatalogItem[] = Array.from({ length: 20000 }, (_, i) => ({

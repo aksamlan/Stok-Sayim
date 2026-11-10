@@ -424,7 +424,7 @@ export const printStoreReportPDF = (
       r =>
         `<tr class="${r.status}"><td class="mono">${escHtml(r.barcode)}</td>` +
         `<td>${escHtml(r.name ?? "-")}</td><td>${escHtml(r.category ?? "-")}</td>` +
-        `<td class="num">${r.expected ?? "-"}</td><td class="num">${r.counted}</td>` +
+        `<td class="num">${escHtml(String(r.expected ?? "-"))}</td><td class="num">${escHtml(String(r.counted))}</td>` +
         `<td class="num">${storeDiffText(r) || "-"}</td><td>${STATUS_TEXT[r.status]}</td></tr>`
     )
     .join("")

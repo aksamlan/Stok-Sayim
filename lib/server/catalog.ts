@@ -24,7 +24,11 @@ export function replaceCatalog(
       const barcode = String(item.barcode ?? "").trim()
       if (!barcode) continue
       const category = item.category == null ? null : String(item.category).trim() || null
-      insert.run(storeId, barcode, String(item.name ?? "").trim(), category, item.expected)
+      const expected =
+        typeof item.expected === "number" && Number.isFinite(item.expected)
+          ? item.expected
+          : null
+      insert.run(storeId, barcode, String(item.name ?? "").trim(), category, expected)
     }
     db.prepare(
       "UPDATE stores SET catalog_version = catalog_version + 1 WHERE id = ?"

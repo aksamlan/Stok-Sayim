@@ -1,4 +1,9 @@
-import { AuthExpiredError, apiGetCatalog, apiPostScan } from "./api"
+import {
+  ApiHttpError,
+  AuthExpiredError,
+  apiGetCatalog,
+  apiPostScan,
+} from "./api"
 import {
   idbBulkPut,
   idbClear,
@@ -138,6 +143,52 @@ export async function pendingCount(storeId: string): Promise<number> {
   return rows.length
 }
 
+export type DrainResult = {
+  posted: number
+  dropped: number
+  authExpired: boolean
+}
+
+// Kuyruğu oturum oturum gönderir. Bir oturumun hatası diğerlerini ASLA
+// engellemez; kapatılmış/silinmiş oturuma (409/404) ait olaylar kuyruktan
+// düşürülür ki kuyruk sonsuza dek tıkanmasın. Ağ hatasında olaylar kuyrukta
+// kalır ve sonraki turda yeniden denenir.
+export async function processQueue(
+  events: QueuedEvent[],
+  post: (batch: QueuedEvent[]) => Promise<void>,
+  remove: (ids: string[]) => Promise<void>
+): Promise<DrainResult> {
+  const bySession = new Map<string, QueuedEvent[]>()
+  for (const e of events) {
+    const list = bySession.get(e.sessionId) ?? []
+    list.push(e)
+    bySession.set(e.sessionId, list)
+  }
+  const result: DrainResult = { posted: 0, dropped: 0, authExpired: false }
+  for (const [, group] of bySession) {
+    try {
+      for (let i = 0; i < group.length; i += 500) {
+        const batch = group.slice(i, i + 500)
+        await post(batch)
+        await remove(batch.map((e) => e.id))
+        result.posted += batch.length
+      }
+    } catch (e) {
+      if (e instanceof AuthExpiredError) {
+        result.authExpired = true
+        break
+      }
+      if (e instanceof ApiHttpError && (e.status === 409 || e.status === 404)) {
+        await remove(group.map((x) => x.id))
+        result.dropped += group.length
+        continue
+      }
+      // Ağ/sunucu hatası: bu grubun olayları kuyrukta kalsın, diğer gruplara geç
+    }
+  }
+  return result
+}
+
 export function startSync(
   auth: StoreAuth,
   cb: (state: SyncState) => void
@@ -146,6 +197,7 @@ export function startSync(
   let draining = false
   let lastOkAt: number | null = null
   let authExpired = false
+  let droppedTotal = 0
 
   const emit = async () => {
     const pending = await pendingCount(auth.storeId).catch(() => 0)
@@ -154,6 +206,7 @@ export function startSync(
       lastOkAt,
       online: typeof navigator === "undefined" ? true : navigator.onLine,
       authExpired,
+      droppedTotal,
     })
   }
 
@@ -163,24 +216,16 @@ export function startSync(
     try {
       const db = await openIdb(auth.storeId)
       const all = await idbGetAll<QueuedEvent>(db, "queue")
-      const bySession = new Map<string, QueuedEvent[]>()
-      for (const e of all) {
-        const list = bySession.get(e.sessionId) ?? []
-        list.push(e)
-        bySession.set(e.sessionId, list)
-      }
-      for (const [, events] of bySession) {
-        for (let i = 0; i < events.length; i += 500) {
-          const batch = events.slice(i, i + 500)
-          await apiPostScan(auth.token, batch)
-          await idbDelete(db, "queue", batch.map((e) => e.id))
-          lastOkAt = Date.now()
-        }
-      }
-      if (all.length === 0) lastOkAt = lastOkAt ?? Date.now()
-    } catch (e) {
-      if (e instanceof AuthExpiredError) authExpired = true
-      // Diğer hatalar: çevrimdışı varsay, sonraki turda tekrar dene
+      const result = await processQueue(
+        all,
+        (batch) => apiPostScan(auth.token, batch).then(() => {}),
+        (ids) => idbDelete(db, "queue", ids)
+      )
+      if (result.authExpired) authExpired = true
+      droppedTotal += result.dropped
+      if (result.posted > 0 || all.length === 0) lastOkAt = Date.now()
+    } catch {
+      // IndexedDB vb. beklenmeyen hata: sonraki turda tekrar dene
     } finally {
       draining = false
       await emit()

@@ -31,8 +31,14 @@ export function rateLimitOrThrow(
   limit = 10,
   windowMs = 60000
 ): void {
+  // SON girdiyi kullan: zincire istemci istediğini ekleyebilir ama son değeri
+  // önümüzdeki reverse proxy (Caddy) yazar. Proxy yokken uygulama zaten
+  // 127.0.0.1'e bağlı kurulur (scripts/kurulum.sh), doğrudan erişim olmaz.
   const forwarded = req.headers.get("x-forwarded-for")
-  const ip = forwarded ? forwarded.split(",")[0].trim() : "local"
+  const parts = forwarded
+    ? forwarded.split(",").map((s) => s.trim()).filter(Boolean)
+    : []
+  const ip = parts.length > 0 ? parts[parts.length - 1] : "local"
   if (!checkRateLimit(`${name}:${ip}`, limit, windowMs)) {
     throw new ApiError(429, "Çok fazla deneme yapıldı, biraz bekleyip tekrar dene")
   }

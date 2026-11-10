@@ -130,7 +130,14 @@ export default function PanelPage() {
   const searchRef = useRef(search)
   searchRef.current = search
 
+  const [closedViewId, setClosedViewId] = useState<string | null>(null)
+
   const activeSession = sessions?.find((s) => s.status === "active") ?? null
+  // Aktif sayım yoksa kapalı sayımlar salt okunur görüntülenip dışa aktarılabilir
+  const closedSessions = sessions?.filter((s) => s.status === "closed") ?? []
+  const viewSession =
+    activeSession ??
+    (closedSessions.find((s) => s.id === closedViewId) ?? closedSessions[0] ?? null)
 
   const handleAuthError = useCallback(
     (err: unknown): boolean => {
@@ -186,10 +193,10 @@ export default function PanelPage() {
   }, [dash])
 
   const refreshDashboard = useCallback(async () => {
-    if (!auth || !activeSession) return
+    if (!auth || !viewSession) return
     try {
       const d = await apiDashboard(auth.token, {
-        sessionId: activeSession.id,
+        sessionId: viewSession.id,
         filter,
         search: searchRef.current || undefined,
         category: category || undefined,
@@ -199,7 +206,7 @@ export default function PanelPage() {
     } catch (err) {
       handleAuthError(err)
     }
-  }, [auth, activeSession, filter, category, page, handleAuthError])
+  }, [auth, viewSession, filter, category, page, handleAuthError])
 
   // İlk yükleme + filtre değişimi + 5 sn canlı yenileme
   useEffect(() => {
@@ -249,13 +256,13 @@ export default function PanelPage() {
   }
 
   const fetchAllRows = async (): Promise<StoreReportRow[]> => {
-    if (!auth || !activeSession) return []
+    if (!auth || !viewSession) return []
     const all: StoreReportRow[] = []
     let p = 1
     for (;;) {
       const { rows, rowTotal } = await apiDashboardExport(
         auth.token,
-        activeSession.id,
+        viewSession.id,
         p
       )
       all.push(...(rows as StoreReportRow[]))
@@ -266,7 +273,7 @@ export default function PanelPage() {
   }
 
   const runExport = async (kind: "xlsx" | "csv" | "pdf" | "share") => {
-    if (!auth || !activeSession || exportBusy) return
+    if (!auth || !viewSession || exportBusy) return
     setExportBusy(true)
     try {
       const rows = await fetchAllRows()
@@ -275,7 +282,7 @@ export default function PanelPage() {
         return
       }
       const store = auth.storeName
-      const session = activeSession.name
+      const session = viewSession.name
       if (kind === "xlsx") {
         await downloadStoreReportXLSX(rows, store, session)
         toast.success("XLSX indirildi")
@@ -387,6 +394,33 @@ export default function PanelPage() {
                   </Button>
                 </div>
               </>
+            ) : closedSessions.length > 0 ? (
+              <>
+                <select
+                  value={viewSession?.id ?? ""}
+                  onChange={(e) => {
+                    setClosedViewId(e.target.value)
+                    setDash(null)
+                    setPage(1)
+                  }}
+                  className="h-8 rounded-md border bg-card px-2 text-sm max-w-48"
+                >
+                  {closedSessions.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                <Badge variant="outline" className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30">
+                  Kapalı — salt okunur
+                </Badge>
+                <div className="ml-auto">
+                  <Button size="sm" className="h-8" onClick={() => setNewSessionOpen(true)}>
+                    <Play className="h-3.5 w-3.5 mr-1" />
+                    Yeni Sayım Başlat
+                  </Button>
+                </div>
+              </>
             ) : (
               <>
                 <span className="text-sm text-muted-foreground">
@@ -420,7 +454,7 @@ export default function PanelPage() {
               <p className="text-sm">Yükleniyor...</p>
             </CardContent>
           </Card>
-        ) : !activeSession ? (
+        ) : !viewSession ? (
           <Card>
             <CardContent className="py-10 text-center text-muted-foreground">
               <Play className="h-10 w-10 mx-auto mb-3 opacity-40" />

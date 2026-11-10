@@ -87,6 +87,18 @@ yeterli (sadece sunucudan değiştirilebilir — güvenlik böyle sağlanıyor).
 > DNS kaydını eklemiş olman iyi olur. Sertifika alınamazsa bulutu geçici olarak
 > gri yapıp `sudo systemctl restart caddy` de, sonra tekrar turuncuya al.
 
+### Güvenlik notu
+
+Alan adı bağlandığında script uygulamayı yalnız `127.0.0.1`'e bağlar: dışarıdan
+sadece Caddy üzerinden (HTTPS) erişilir, `:3000` portu internete kapalı olur.
+İstersen güvenlik duvarını da aç:
+
+```bash
+sudo ufw allow OpenSSH
+sudo ufw allow 80,443/tcp
+sudo ufw enable
+```
+
 ## 6. Güncelleme (yeni sürüm çıktığında)
 
 Menüden **2**'yi seç — ya da kısayol:

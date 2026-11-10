@@ -70,4 +70,7 @@ export type SyncState = {
   lastOkAt: number | null
   online: boolean
   authExpired?: boolean
+  // Kapatılmış/silinmiş bir sayıma ait olduğu için gönderilemeyip kuyruktan
+  // düşürülen olayların kümülatif sayısı (kullanıcıya uyarı göstermek için).
+  droppedTotal?: number
 }

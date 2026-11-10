@@ -13,6 +13,14 @@ export class AuthExpiredError extends Error {
   }
 }
 
+export class ApiHttpError extends Error {
+  status: number
+  constructor(status: number, message: string) {
+    super(message)
+    this.status = status
+  }
+}
+
 async function request<T>(
   path: string,
   options: { method?: string; token?: string; body?: unknown } = {}
@@ -32,17 +40,19 @@ async function request<T>(
   } catch {
     throw new Error("Sunucuya ulaşılamadı")
   }
-  if (res.status === 401) throw new AuthExpiredError()
+  // 401 yalnız token GÖNDERİLMİŞKEN "oturum doldu" demektir; girişte 401,
+  // sunucunun "kod veya şifre hatalı" mesajıdır ve kullanıcıya aynen gösterilir.
+  if (res.status === 401 && options.token) throw new AuthExpiredError()
   let data: unknown = null
   try {
     data = await res.json()
   } catch {}
   if (!res.ok) {
     const msg =
-      data && typeof data === "object" && "error" in data
+      data && typeof data === "object" && data !== null && "error" in data
         ? String((data as { error: unknown }).error)
         : `Sunucu hatası (${res.status})`
-    throw new Error(msg)
+    throw new ApiHttpError(res.status, msg)
   }
   return data as T
 }
