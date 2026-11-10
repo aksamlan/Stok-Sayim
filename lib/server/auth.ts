@@ -17,7 +17,7 @@ export class ApiError extends Error {
 
 export type TokenPayload = {
   storeId: string
-  role: "counter" | "admin"
+  role: "counter" | "admin" | "super"
   counter: string
   exp: number
 }
@@ -68,7 +68,13 @@ export function verifyToken(db: DatabaseSync, token: string): TokenPayload | nul
       Buffer.from(body, "base64url").toString("utf8")
     ) as TokenPayload
     if (typeof payload.exp !== "number" || payload.exp < Date.now()) return null
-    if (payload.role !== "counter" && payload.role !== "admin") return null
+    if (
+      payload.role !== "counter" &&
+      payload.role !== "admin" &&
+      payload.role !== "super"
+    ) {
+      return null
+    }
     if (typeof payload.storeId !== "string") return null
     return payload
   } catch {
@@ -79,7 +85,7 @@ export function verifyToken(db: DatabaseSync, token: string): TokenPayload | nul
 export function requireAuth(
   db: DatabaseSync,
   req: Request,
-  role?: "admin"
+  role?: "admin" | "super"
 ): TokenPayload {
   const header = req.headers.get("authorization") ?? ""
   const token = header.startsWith("Bearer ") ? header.slice(7) : ""
@@ -87,6 +93,9 @@ export function requireAuth(
   if (!payload) throw new ApiError(401, "Oturum geçersiz, tekrar giriş yap")
   if (role === "admin" && payload.role !== "admin") {
     throw new ApiError(403, "Bu işlem için yönetici girişi gerekli")
+  }
+  if (role === "super" && payload.role !== "super") {
+    throw new ApiError(403, "Bu işlem için platform yöneticisi girişi gerekli")
   }
   return payload
 }

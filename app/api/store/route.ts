@@ -1,8 +1,10 @@
 import { getDb } from "@/lib/server/db"
 import { handle, json, readBody } from "@/lib/server/http"
+import { rateLimitOrThrow } from "@/lib/server/ratelimit"
 import { createStore, joinStore } from "@/lib/server/stores"
 
 export const POST = handle(async (req) => {
+  rateLimitOrThrow(req, "store-create", 5, 60000)
   const body = await readBody<{
     name: string
     countPassword: string
