@@ -9,6 +9,9 @@ import {
   ClipboardList,
   Copy,
   Download,
+  Eraser,
+  MoreVertical,
+  Trash2,
   FileSpreadsheet,
   FileText,
   Loader2,
@@ -72,6 +75,7 @@ import {
   AuthExpiredError,
   apiCatalogCount,
   apiCloseSession,
+  apiResetStore,
   apiCounters,
   apiCreateSession,
   apiDashboard,
@@ -127,6 +131,9 @@ export default function PanelPage() {
   const [newSessionOpen, setNewSessionOpen] = useState(false)
   const [newSessionName, setNewSessionName] = useState("")
   const [closeConfirm, setCloseConfirm] = useState(false)
+  const [resetMode, setResetMode] = useState<"counts" | "all" | null>(null)
+  const [resetText, setResetText] = useState("")
+  const [resetBusy, setResetBusy] = useState(false)
   const [exportBusy, setExportBusy] = useState(false)
   const [catalogCount, setCatalogCount] = useState(0)
   const [registered, setRegistered] = useState<{ name: string; createdAt: number }[]>([])
@@ -272,6 +279,36 @@ export default function PanelPage() {
     }
   }
 
+  const runReset = async () => {
+    if (!auth || !resetMode || resetBusy) return
+    if (resetMode === "all" && resetText.trim().toUpperCase() !== "SIL") return
+    if (resetMode === "counts" && !viewSession) return
+    setResetBusy(true)
+    try {
+      const r =
+        resetMode === "all"
+          ? await apiResetStore(auth.token, { mode: "all", confirm: "SIL" })
+          : await apiResetStore(auth.token, { mode: "counts", sessionId: viewSession!.id })
+      setResetMode(null)
+      setResetText("")
+      setClosedViewId(null)
+      setDash(null)
+      setPage(1)
+      await refreshSessions()
+      await refreshCatalogCount()
+      toast.success(
+        resetMode === "all"
+          ? "Her şey silindi — mağaza sıfırlandı"
+          : `${r.removedEvents.toLocaleString("tr-TR")} okutma silindi, sayım temiz`
+      )
+    } catch (err) {
+      if (!handleAuthError(err))
+        toast.error(err instanceof Error ? err.message : "Temizlenemedi")
+    } finally {
+      setResetBusy(false)
+    }
+  }
+
   const fetchAllRows = async (): Promise<StoreReportRow[]> => {
     if (!auth || !viewSession) return []
     const all: StoreReportRow[] = []
@@ -386,6 +423,37 @@ export default function PanelPage() {
             >
               {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8 shrink-0"
+                  title="Temizlik"
+                  aria-label="Temizlik seçenekleri"
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {viewSession && (
+                  <DropdownMenuItem onClick={() => setResetMode("counts")}>
+                    <Eraser />
+                    {activeSession ? "Sayımları temizle" : "Bu sayımı sil"}
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={() => {
+                    setResetText("")
+                    setResetMode("all")
+                  }}
+                >
+                  <Trash2 />
+                  Komple sıfırla
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
               variant="ghost"
               size="icon"
@@ -876,6 +944,86 @@ export default function PanelPage() {
             <AlertDialogCancel>Vazgeç</AlertDialogCancel>
             <AlertDialogAction onClick={() => void endSession()}>
               Sayımı Bitir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Temizleme onayları */}
+      <AlertDialog
+        open={resetMode !== null}
+        onOpenChange={(o) => {
+          if (!o && !resetBusy) {
+            setResetMode(null)
+            setResetText("")
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {resetMode === "all"
+                ? "Her şey silinsin mi?"
+                : activeSession
+                  ? "Sayımlar temizlensin mi?"
+                  : "Bu sayım silinsin mi?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                {resetMode === "all" ? (
+                  <>
+                    <p>
+                      Bu mağazadaki <b>ürün listesi, tüm sayımlar, okutmalar ve sayımcı
+                      kayıtları</b> kalıcı olarak silinir. Sayımcıların oturumu kapanır.
+                      Mağaza kodu ve şifreler kalır.
+                    </p>
+                    <p className="font-medium text-destructive">Bu işlem geri alınamaz.</p>
+                    <p>Onaylamak için aşağıya <b>SIL</b> yaz:</p>
+                    <Input
+                      value={resetText}
+                      onChange={(e) => setResetText(e.target.value)}
+                      placeholder="SIL"
+                      autoComplete="off"
+                      autoCapitalize="characters"
+                      className="h-10"
+                    />
+                  </>
+                ) : (
+                  <>
+                    <p>
+                      <b>{viewSession?.name}</b> sayımındaki{" "}
+                      <b>
+                        {(dash?.totals.totalQty ?? 0).toLocaleString("tr-TR")} adetlik tüm
+                        okutmalar
+                      </b>{" "}
+                      silinir.{" "}
+                      {activeSession
+                        ? "Aynı adla boş bir sayım açılır; ürün listesi ve sayımcılar kalır."
+                        : "Ürün listesi ve sayımcılar kalır."}
+                    </p>
+                    <p className="font-medium text-destructive">Bu işlem geri alınamaz.</p>
+                    {activeSession && staleCounters.length > 0 && (
+                      <p className="font-medium text-amber-700 dark:text-amber-400">
+                        {staleCounters.join(", ")} çevrimdışı sayıyor olabilir; gönderemedikleri
+                        okutmalar yeni sayıma işlenmez.
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={resetBusy}>Hayır, vazgeç</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              disabled={resetBusy || (resetMode === "all" && resetText.trim().toUpperCase() !== "SIL")}
+              onClick={(e) => {
+                e.preventDefault()
+                void runReset()
+              }}
+            >
+              {resetBusy ? "Siliniyor..." : "Evet, sil"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -9,6 +9,7 @@ import {
   listCounterNamesForJoin,
   listSessions,
   resetCounterPin,
+  resetStoreData,
 } from "../../lib/server/stores"
 
 function setup() {
@@ -133,4 +134,61 @@ test("PIN'li ad PIN'siz alınamaz; ad listesi yanlış şifreyle verilmez", () =
   expect(joinStore(db, code, "say123", "mehmet", "4321").counter).toBe("Mehmet")
   expect(listCounterNamesForJoin(db, code, "say123")).toEqual([{ name: "Mehmet", hasPin: true }])
   expect(() => listCounterNamesForJoin(db, code, "yanlis")).toThrow()
+})
+
+test("sayımları temizle: okutmalar silinir, aynı adla yeni sayım açılır, eski okutma reddedilir", async () => {
+  const { recordEvents } = await import("../../lib/server/counts")
+  const { replaceCatalog } = await import("../../lib/server/catalog")
+  const { db, storeId, code } = setup()
+  replaceCatalog(db, storeId, [{ barcode: "1", name: "A", category: null, expected: 5 }])
+  joinStore(db, code, "say123", "Ayşe", "")
+  const { id: sid } = createSession(db, storeId, "Deneme")
+  recordEvents(db, storeId, "Ayşe", [
+    { id: "e1", sessionId: sid, barcode: "1", qty: 3, createdAt: Date.now() },
+  ])
+  const r = resetStoreData(db, storeId, "counts", sid)
+  expect(r.removedEvents).toBe(1)
+  expect(r.newSessionId).toBeTruthy()
+  const sessions = listSessions(db, storeId)
+  expect(sessions).toHaveLength(1)
+  expect(sessions[0]).toMatchObject({ name: "Deneme", status: "active" })
+  expect(sessions[0].id).not.toBe(sid)
+  // telefonda bekleyen eski okutma yeni sayıma karışmaz
+  expect(() =>
+    recordEvents(db, storeId, "Ayşe", [
+      { id: "e2", sessionId: sid, barcode: "1", qty: 1, createdAt: Date.now() },
+    ])
+  ).toThrow()
+  // ürün listesi ve sayımcı kalır
+  expect(db.prepare("SELECT COUNT(*) c FROM products WHERE store_id=?").get(storeId)).toMatchObject({ c: 1 })
+  expect(db.prepare("SELECT COUNT(*) c FROM counters WHERE store_id=?").get(storeId)).toMatchObject({ c: 1 })
+  // başka mağazanın sayımına dokunulamaz
+  const other = createStore(db, "Şube 2", "say123", "admin123")
+  const os = createSession(db, other.storeId, "X")
+  expect(() => resetStoreData(db, storeId, "counts", os.id)).toThrow()
+})
+
+test("komple sıfırla: ürün, sayım, okutma ve sayımcılar silinir; diğer mağaza etkilenmez", async () => {
+  const { recordEvents } = await import("../../lib/server/counts")
+  const { replaceCatalog, catalogVersion } = await import("../../lib/server/catalog")
+  const { db, storeId, code } = setup()
+  const other = createStore(db, "Şube 2", "say123", "admin123")
+  for (const sid of [storeId, other.storeId]) {
+    replaceCatalog(db, sid, [{ barcode: "1", name: "A", category: null, expected: 5 }])
+  }
+  joinStore(db, code, "say123", "Ayşe", "1234")
+  const { id } = createSession(db, storeId, "S1")
+  recordEvents(db, storeId, "Ayşe", [{ id: "e1", sessionId: id, barcode: "1", qty: 2, createdAt: Date.now() }])
+  const v0 = catalogVersion(db, storeId)
+  const r = resetStoreData(db, storeId, "all")
+  expect(r.removedEvents).toBe(1)
+  expect(listSessions(db, storeId)).toHaveLength(0)
+  for (const t of ["products", "counters", "scan_events"]) {
+    expect(db.prepare(`SELECT COUNT(*) c FROM ${t} WHERE store_id=?`).get(storeId)).toMatchObject({ c: 0 })
+  }
+  expect(catalogVersion(db, storeId)).toBeGreaterThan(v0)
+  // mağaza (kod + şifreler) durur: yeniden girilebilir
+  expect(joinStore(db, code, "admin123", "", "").role).toBe("admin")
+  // diğer mağaza dokunulmamış
+  expect(db.prepare("SELECT COUNT(*) c FROM products WHERE store_id=?").get(other.storeId)).toMatchObject({ c: 1 })
 })

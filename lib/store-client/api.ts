@@ -120,6 +120,13 @@ export function apiCreateSession(token: string, name: string): Promise<{ id: str
   return request("/api/sessions", { method: "POST", token, body: { name } })
 }
 
+export function apiResetStore(
+  token: string,
+  body: { mode: "counts"; sessionId: string } | { mode: "all"; confirm: string }
+): Promise<{ removedEvents: number; newSessionId: string | null }> {
+  return request("/api/store/reset", { method: "POST", token, body })
+}
+
 export function apiCloseSession(token: string, id: string): Promise<{ ok: true }> {
   return request("/api/sessions", {
     method: "PATCH",

@@ -238,3 +238,56 @@ export function listCounterNamesForJoin(
       .all(row.id) as { name: string; pin_hash: string }[]
   ).map((r) => ({ name: r.name, hasPin: r.pin_hash !== "" }))
 }
+
+// Yönetici temizliği.
+//  - "counts": verilen sayımın TÜM okutmalarını siler. Sayım aktifse aynı adla
+//    yepyeni (boş) bir sayım açılır; telefonlarda bekleyen eski okutmalar eski
+//    sayım kimliğine gittiği için reddedilir, yeni sayıma karışmaz.
+//    Kapalı sayımda sayımın kendisi silinir.
+//  - "all": mağazanın ürün listesi, tüm sayımlar, okutmalar ve sayımcı kayıtları
+//    silinir (mağaza kodu ve şifreler kalır). Sayımcı oturumları düşer.
+export function resetStoreData(
+  db: DatabaseSync,
+  storeId: string,
+  mode: "counts" | "all",
+  sessionId?: string
+): { removedEvents: number; newSessionId: string | null } {
+  db.exec("BEGIN IMMEDIATE")
+  try {
+    let removedEvents = 0
+    let newSessionId: string | null = null
+    if (mode === "all") {
+      removedEvents = Number(
+        db.prepare("DELETE FROM scan_events WHERE store_id = ?").run(storeId).changes
+      )
+      db.prepare("DELETE FROM sessions WHERE store_id = ?").run(storeId)
+      db.prepare("DELETE FROM products WHERE store_id = ?").run(storeId)
+      db.prepare("DELETE FROM counters WHERE store_id = ?").run(storeId)
+      db.prepare("UPDATE stores SET catalog_version = catalog_version + 1 WHERE id = ?").run(
+        storeId
+      )
+    } else {
+      const s = db
+        .prepare("SELECT id, name, status FROM sessions WHERE store_id = ? AND id = ?")
+        .get(storeId, sessionId ?? "") as { id: string; name: string; status: string } | undefined
+      if (!s) throw new ApiError(404, "Sayım bulunamadı")
+      removedEvents = Number(
+        db
+          .prepare("DELETE FROM scan_events WHERE store_id = ? AND session_id = ?")
+          .run(storeId, s.id).changes
+      )
+      db.prepare("DELETE FROM sessions WHERE store_id = ? AND id = ?").run(storeId, s.id)
+      if (s.status === "active") {
+        newSessionId = randomUUID()
+        db.prepare(
+          "INSERT INTO sessions (id, store_id, name, status, created_at) VALUES (?, ?, ?, 'active', ?)"
+        ).run(newSessionId, storeId, s.name, Date.now())
+      }
+    }
+    db.exec("COMMIT")
+    return { removedEvents, newSessionId }
+  } catch (e) {
+    db.exec("ROLLBACK")
+    throw e
+  }
+}
