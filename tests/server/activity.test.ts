@@ -1,7 +1,7 @@
 import { expect, test } from "vitest"
 import { listActivity, logActivity, pruneActivity } from "../../lib/server/activity"
 import { replaceCatalog } from "../../lib/server/catalog"
-import { dashboard, recordEvents, type ScanEvent } from "../../lib/server/counts"
+import { counterDetail, dashboard, recordEvents, type ScanEvent } from "../../lib/server/counts"
 import { openDatabase } from "../../lib/server/db"
 import { createSession, createStore } from "../../lib/server/stores"
 
@@ -96,4 +96,22 @@ test("sorgular indeks kullanır (tam tablo taraması yok)", () => {
   expect(plan("SELECT * FROM scan_events WHERE store_id=? ORDER BY received_at DESC LIMIT 50", storeId)).toMatch(/idx_events_recent/)
   expect(plan("SELECT * FROM activity_log WHERE store_id=? ORDER BY at DESC LIMIT 50", storeId)).toMatch(/idx_activity_store_at/)
   expect(plan("SELECT barcode, SUM(qty) FROM scan_events WHERE store_id=? AND session_id=? GROUP BY barcode", storeId, sessionId)).toMatch(/idx_events_barcode/)
+})
+
+test("sayımcı detayı: yalnız kendi saydığı ürünler, net adet, en son okutulan üstte, arama çalışır", async () => {
+  const { db, storeId, sessionId } = setup()
+  recordEvents(db, storeId, "Ayşe", [ev(sessionId, "1", 3), ev(sessionId, "2", 2)])
+  await new Promise((r) => setTimeout(r, 5))
+  recordEvents(db, storeId, "Ayşe", [ev(sessionId, "3", 1), ev(sessionId, "2", -2)]) // 2 silindi
+  recordEvents(db, storeId, "Mehmet", [ev(sessionId, "1", 9)])
+  const d = counterDetail(db, storeId, sessionId, "Ayşe")
+  expect(d.rows.map((r) => [r.barcode, r.qty])).toEqual([["3", 1], ["1", 3]]) // silinen yok, Mehmet'in 9'u yok
+  expect(d).toMatchObject({ total: 2, totalQty: 4 })
+  expect(d.rows[0].name).toBe("Yoğurt")
+  expect(counterDetail(db, storeId, sessionId, "Ayşe", { search: "süt" }).rows.map((r) => r.barcode)).toEqual(["1"])
+  expect(counterDetail(db, storeId, sessionId, "Ayşe", { limit: 1 })).toMatchObject({ total: 2 })
+  expect(counterDetail(db, storeId, sessionId, "Ayşe", { limit: 1 }).rows).toHaveLength(1)
+  // başka mağaza göremez
+  const other = createStore(db, "B", "say123", "admin123")
+  expect(counterDetail(db, other.storeId, sessionId, "Ayşe").rows).toHaveLength(0)
 })

@@ -221,3 +221,20 @@ export function apiActivity(
   q.set("limit", String(opts.limit ?? 50))
   return request(`/api/activity?${q.toString()}`, { token })
 }
+
+export type CounterDetail = {
+  rows: { barcode: string; name: string | null; category: string | null; qty: number; lastAt: number }[]
+  total: number
+  totalQty: number
+  serverNow: number
+}
+
+export function apiCounterDetail(
+  token: string,
+  opts: { sessionId: string; counter: string; search?: string; limit?: number }
+): Promise<CounterDetail> {
+  const q = new URLSearchParams({ sessionId: opts.sessionId, counter: opts.counter })
+  if (opts.search) q.set("search", opts.search)
+  q.set("limit", String(opts.limit ?? 100))
+  return request(`/api/counter-detail?${q.toString()}`, { token })
+}

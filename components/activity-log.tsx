@@ -35,23 +35,25 @@ function describe(e: ActivityEntry): { text: string; tone: "add" | "remove" | "i
   }
 }
 
-// "Kim en son ne yaptı": okutmalar, silmeler, girişler, sayım işlemleri; en yeni üstte.
-// Açıkken 8 sn'de bir yenilenir; hepsi indeksli sorgudur (yavaşlatmaz).
-export function ActivityLog({
+// Hareket listesi (sabit kişi/sayım için). Etkinken 8 sn'de bir yenilenir; hepsi
+// indeksli sorgudur (yavaşlatmaz).
+export function ActivityFeed({
   token,
   sessionId,
-  people,
+  actor,
+  active,
   onError,
+  max = 500,
 }: {
   token: string
   sessionId?: string
-  people: string[]
+  actor?: string
+  active: boolean
   onError: (err: unknown) => void
+  max?: number
 }) {
-  const [open, setOpen] = useState(false)
   const [entries, setEntries] = useState<ActivityEntry[]>([])
   const [limit, setLimit] = useState(50)
-  const [actor, setActor] = useState("")
   const [loading, setLoading] = useState(false)
 
   const load = useCallback(async () => {
@@ -66,15 +68,78 @@ export function ActivityLog({
   }, [token, sessionId, actor, limit, onError])
 
   useEffect(() => {
-    if (!open) return
+    setLimit(50)
+  }, [actor])
+
+  useEffect(() => {
+    if (!active) return
     setLoading(true)
     void load()
     const t = setInterval(() => {
       if (document.visibilityState === "visible") void load()
     }, 8000)
     return () => clearInterval(t)
-  }, [open, load])
+  }, [active, load])
 
+  return (
+    <>
+      <p className="px-3 pb-1 text-xs text-muted-foreground">
+        {loading ? "yükleniyor..." : `son ${entries.length} hareket (KKTC saati)`}
+      </p>
+      <ul className="max-h-[50vh] divide-y overflow-auto border-t">
+        {entries.length === 0 && !loading && (
+          <li className="px-3 py-4 text-center text-sm text-muted-foreground">Henüz hareket yok</li>
+        )}
+        {entries.map((e, i) => {
+          const d = describe(e)
+          return (
+            <li key={`${e.at}-${i}`} className="flex items-baseline gap-2 px-3 py-1.5 text-sm">
+              <span className="w-[8.5rem] shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
+                {fmtShort(e.at)}
+              </span>
+              <span className="min-w-0">
+                {!actor && <b className="font-semibold">{e.actor} </b>}
+                <span
+                  className={
+                    d.tone === "add"
+                      ? "text-foreground"
+                      : d.tone === "remove"
+                        ? "text-destructive"
+                        : "text-muted-foreground"
+                  }
+                >
+                  {d.text}
+                </span>
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+      {entries.length >= limit && limit < max && (
+        <div className="border-t p-2 text-center">
+          <Button variant="ghost" size="sm" onClick={() => setLimit((l) => Math.min(max, l + 50))}>
+            Daha fazla göster
+          </Button>
+        </div>
+      )}
+    </>
+  )
+}
+
+// "Kim en son ne yaptı": tüm hareketler, kişiye göre süzülebilir; en yeni üstte.
+export function ActivityLog({
+  token,
+  sessionId,
+  people,
+  onError,
+}: {
+  token: string
+  sessionId?: string
+  people: string[]
+  onError: (err: unknown) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [actor, setActor] = useState("")
   return (
     <Card className="mb-3 py-0 gap-0 overflow-hidden">
       <button
@@ -90,13 +155,10 @@ export function ActivityLog({
       </button>
       {open && (
         <div className="border-t">
-          <div className="flex items-center gap-2 px-3 py-2">
+          <div className="px-3 py-2">
             <select
               value={actor}
-              onChange={(e) => {
-                setActor(e.target.value)
-                setLimit(50)
-              }}
+              onChange={(e) => setActor(e.target.value)}
               className="h-8 rounded-md border bg-card px-2 text-sm"
               aria-label="Kişiye göre filtrele"
             >
@@ -108,46 +170,14 @@ export function ActivityLog({
                 </option>
               ))}
             </select>
-            <span className="text-xs text-muted-foreground">
-              {loading ? "yükleniyor..." : `son ${entries.length} hareket (KKTC saati)`}
-            </span>
           </div>
-          <ul className="max-h-[50vh] divide-y overflow-auto">
-            {entries.length === 0 && !loading && (
-              <li className="px-3 py-4 text-center text-sm text-muted-foreground">Henüz hareket yok</li>
-            )}
-            {entries.map((e, i) => {
-              const d = describe(e)
-              return (
-                <li key={`${e.at}-${i}`} className="flex items-baseline gap-2 px-3 py-1.5 text-sm">
-                  <span className="w-[8.5rem] shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
-                    {fmtShort(e.at)}
-                  </span>
-                  <span className="min-w-0">
-                    <b className="font-semibold">{e.actor}</b>{" "}
-                    <span
-                      className={
-                        d.tone === "add"
-                          ? "text-foreground"
-                          : d.tone === "remove"
-                            ? "text-destructive"
-                            : "text-muted-foreground"
-                      }
-                    >
-                      {d.text}
-                    </span>
-                  </span>
-                </li>
-              )
-            })}
-          </ul>
-          {entries.length >= limit && limit < 500 && (
-            <div className="border-t p-2 text-center">
-              <Button variant="ghost" size="sm" onClick={() => setLimit((l) => Math.min(500, l + 50))}>
-                Daha fazla göster
-              </Button>
-            </div>
-          )}
+          <ActivityFeed
+            token={token}
+            sessionId={sessionId}
+            actor={actor || undefined}
+            active={open}
+            onError={onError}
+          />
         </div>
       )}
     </Card>

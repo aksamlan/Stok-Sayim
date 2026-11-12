@@ -31,6 +31,7 @@ import { Toaster, toast } from "sonner"
 import { PoweredByStokzen, StokzenWordmark } from "@/components/stokzen"
 import { ActivityLog } from "@/components/activity-log"
 import { CatalogUpload } from "@/components/catalog-upload"
+import { CounterDetailDialog } from "@/components/counter-detail-dialog"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -134,6 +135,7 @@ export default function PanelPage() {
   const [closeConfirm, setCloseConfirm] = useState(false)
   // Sunucu saati − cihaz saati: "x dk önce" cihaz saatinden bağımsız doğru olsun
   const [skew, setSkew] = useState(0)
+  const [detailCounter, setDetailCounter] = useState<string | null>(null)
   const [resetMode, setResetMode] = useState<"counts" | "all" | null>(null)
   const [resetText, setResetText] = useState("")
   const [resetBusy, setResetBusy] = useState(false)
@@ -652,7 +654,16 @@ export default function PanelPage() {
                     <TableBody>
                       {counterRows.map((c) => (
                         <TableRow key={c.counter}>
-                          <TableCell className="py-1.5 font-medium">{c.counter}</TableCell>
+                          <TableCell className="py-1.5 font-medium">
+                            <button
+                              type="button"
+                              onClick={() => setDetailCounter(c.counter)}
+                              className="text-left text-primary underline-offset-2 hover:underline"
+                              title="Neleri saymış, ne yapmış — aç"
+                            >
+                              {c.counter}
+                            </button>
+                          </TableCell>
                           <TableCell className="py-1.5 text-right font-bold tabular-nums">
                             {c.qty.toLocaleString("tr-TR")}
                           </TableCell>
@@ -959,6 +970,14 @@ export default function PanelPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <CounterDetailDialog
+        token={auth.token}
+        sessionId={viewSession?.id}
+        counter={detailCounter}
+        onClose={() => setDetailCounter(null)}
+        onError={handleAuthError}
+      />
 
       {/* Temizleme onayları */}
       <AlertDialog

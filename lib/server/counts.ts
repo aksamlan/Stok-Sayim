@@ -309,3 +309,46 @@ function buildResult(
     serverNow: Date.now(),
   }
 }
+
+// Yönetici: seçilen sayımcının bu sayımda neyi ne kadar saydığı (net adet > 0).
+// En son okutulan üstte. idx_events_counter ile (mağaza, sayım, sayımcı) indeksli.
+export type CounterDetailRow = {
+  barcode: string
+  name: string | null
+  category: string | null
+  qty: number
+  lastAt: number
+}
+
+export function counterDetail(
+  db: DatabaseSync,
+  storeId: string,
+  sessionId: string,
+  counter: string,
+  opts: { search?: string; limit?: number } = {}
+): { rows: CounterDetailRow[]; total: number; totalQty: number } {
+  const limit = Math.min(Math.max(1, Math.floor(opts.limit ?? 100)), 1000)
+  const search = opts.search?.trim()
+  const filter = search ? "WHERE (g.barcode LIKE ? OR tr_lower(p.name) LIKE ?)" : ""
+  const filterParams = search ? [`%${search}%`, `%${search.toLocaleLowerCase("tr")}%`] : []
+  const base = `
+    FROM (
+      SELECT barcode, SUM(qty) AS qty, MAX(received_at) AS last_at
+      FROM scan_events WHERE store_id = ? AND session_id = ? AND counter = ?
+      GROUP BY barcode HAVING SUM(qty) > 0
+    ) g
+    LEFT JOIN products p ON p.store_id = ? AND p.barcode = g.barcode
+    ${filter}`
+  const params = [storeId, sessionId, counter, storeId, ...filterParams]
+  const rows = db
+    .prepare(
+      `SELECT g.barcode AS barcode, p.name AS name, p.category AS category,
+              g.qty AS qty, g.last_at AS lastAt
+       ${base} ORDER BY g.last_at DESC, g.barcode LIMIT ?`
+    )
+    .all(...params, limit) as CounterDetailRow[]
+  const agg = db
+    .prepare(`SELECT COUNT(*) AS total, COALESCE(SUM(g.qty), 0) AS totalQty ${base}`)
+    .get(...params) as { total: number; totalQty: number }
+  return { rows, total: agg.total, totalQty: agg.totalQty }
+}
