@@ -9,6 +9,7 @@ import {
   ImageUp,
   Loader2,
   LogOut,
+  Minus,
   Moon,
   Plus,
   RefreshCw,
@@ -24,6 +25,16 @@ import { Toaster, toast } from "sonner"
 import Link from "next/link"
 import { CameraScanner } from "@/components/camera-scanner"
 import { PoweredByStokzen, StokzenLogo } from "@/components/stokzen"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -95,6 +106,8 @@ export default function SayimPage() {
   const [qtyDialogBarcode, setQtyDialogBarcode] = useState<string | null>(null)
   const [qtyInput, setQtyInput] = useState("1")
   const qtyPristineRef = useRef(true)
+  const [deleteTarget, setDeleteTarget] = useState<{ barcode: string; qty: number } | null>(null)
+  const adjustBusyRef = useRef(false)
   const [search, setSearch] = useState("")
 
   const catalogRef = useRef<Map<string, CatalogEntry> | null>(null)
@@ -358,6 +371,31 @@ export default function SayimPage() {
     } finally {
       toast.dismiss(toastId)
       setPhotoBusy(false)
+    }
+  }
+
+  // Satırdaki +/−: tek tek artır/azalt. Adet 1'in altına inmez (silmek için ayrı,
+  // onaylı çöp kutusu var); hızlı üst üste dokunmalar sıraya girer.
+  const adjustItem = async (barcode: string, delta: 1 | -1) => {
+    const a = authRef.current
+    const s = sessionRef.current
+    if (!a || !s || adjustBusyRef.current) return
+    const existing = itemsRef.current.find((i) => i.barcode === barcode)
+    if (!existing || existing.qty + delta < 1) return
+    adjustBusyRef.current = true
+    try {
+      await enqueueScan(a.storeId, {
+        id: crypto.randomUUID(),
+        sessionId: s.id,
+        barcode,
+        qty: delta,
+        createdAt: Date.now(),
+      })
+      const fresh = await getMine(a.storeId, s.id)
+      itemsRef.current = fresh
+      setItems(fresh)
+    } finally {
+      adjustBusyRef.current = false
     }
   }
 
@@ -705,8 +743,8 @@ export default function SayimPage() {
                       <TableHeader className="sticky top-0 bg-card z-10 shadow-[0_1px_0_0_var(--border)]">
                         <TableRow>
                           <TableHead className="h-9 text-xs">Ürün</TableHead>
-                          <TableHead className="h-9 text-xs text-right w-16">Adet</TableHead>
-                          <TableHead className="h-9 w-10" />
+                          <TableHead className="h-9 text-xs text-right w-28">Adet</TableHead>
+                          <TableHead className="h-9 w-11" />
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -732,18 +770,44 @@ export default function SayimPage() {
                                   {item.barcode}
                                 </p>
                               </TableCell>
-                              <TableCell className="py-1.5 text-right font-bold tabular-nums">
-                                {item.qty}
+                              <TableCell className="py-1.5">
+                                <div className="flex items-center justify-end gap-1">
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    disabled={item.qty <= 1}
+                                    onClick={() => void adjustItem(item.barcode, -1)}
+                                    title="Bir azalt"
+                                    aria-label="Bir azalt"
+                                  >
+                                    <Minus className="h-4 w-4" />
+                                  </Button>
+                                  <span className="min-w-8 text-center font-bold tabular-nums">
+                                    {item.qty}
+                                  </span>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => void adjustItem(item.barcode, 1)}
+                                    title="Bir artır"
+                                    aria-label="Bir artır"
+                                  >
+                                    <Plus className="h-4 w-4" />
+                                  </Button>
+                                </div>
                               </TableCell>
                               <TableCell className="py-1.5">
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-7 w-7 text-destructive hover:text-destructive"
-                                  onClick={() => void handleDelete(item.barcode)}
+                                  className="h-8 w-8 text-destructive hover:text-destructive"
+                                  onClick={() => setDeleteTarget({ barcode: item.barcode, qty: item.qty })}
                                   title="Sil"
+                                  aria-label="Ürünü sil"
                                 >
-                                  <Trash2 className="h-3.5 w-3.5" />
+                                  <Trash2 className="h-4 w-4" />
                                 </Button>
                               </TableCell>
                             </TableRow>
@@ -902,6 +966,48 @@ export default function SayimPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Silme onayı */}
+      <AlertDialog
+        open={deleteTarget !== null}
+        onOpenChange={(o) => {
+          if (!o) setDeleteTarget(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ürün sayımdan silinsin mi?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-1 text-sm text-muted-foreground">
+                {deleteTarget && (
+                  <>
+                    <p className="font-medium text-foreground">
+                      {catalogRef.current?.get(deleteTarget.barcode)?.name ?? "Listede yok"}
+                    </p>
+                    <p className="font-mono text-xs">{deleteTarget.barcode}</p>
+                    <p>
+                      Saydığın <b>{deleteTarget.qty} adet</b> silinecek. Bu işlem geri alınamaz.
+                    </p>
+                  </>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Hayır, vazgeç</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              onClick={() => {
+                const t = deleteTarget
+                setDeleteTarget(null)
+                if (t) void handleDelete(t.barcode)
+              }}
+            >
+              Evet, sil
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
