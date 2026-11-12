@@ -5,10 +5,12 @@ import {
   Camera,
   Check,
   CloudOff,
+  Delete,
   ImageUp,
   Loader2,
   LogOut,
   Moon,
+  Plus,
   RefreshCw,
   ScanBarcode,
   Search,
@@ -91,7 +93,8 @@ export default function SayimPage() {
   const [cameraOpen, setCameraOpen] = useState(false)
   const [photoBusy, setPhotoBusy] = useState(false)
   const [qtyDialogBarcode, setQtyDialogBarcode] = useState<string | null>(null)
-  const [qtyInput, setQtyInput] = useState("")
+  const [qtyInput, setQtyInput] = useState("1")
+  const qtyPristineRef = useRef(true)
   const [search, setSearch] = useState("")
 
   const catalogRef = useRef<Map<string, CatalogEntry> | null>(null)
@@ -277,7 +280,8 @@ export default function SayimPage() {
       if (quickMode) {
         void addBarcode(code, quickQty)
       } else {
-        setQtyInput("")
+        setQtyInput("1")
+        qtyPristineRef.current = true
         setQtyDialogBarcode(code)
       }
     },
@@ -293,9 +297,39 @@ export default function SayimPage() {
       void addBarcode(code, quickQty)
       focusInput()
     } else {
-      setQtyInput("")
+      setQtyInput("1")
+      qtyPristineRef.current = true
       setQtyDialogBarcode(code)
     }
+  }
+
+  // Hesap makinesi tuş takımı (normal sayımla aynı davranış)
+  const pressQtyDigit = (d: string) => {
+    setQtyInput((prev) => {
+      if (qtyPristineRef.current) {
+        qtyPristineRef.current = false
+        return d
+      }
+      if (prev === "0" || prev === "") return d
+      if (prev.length >= 5) return prev
+      return prev + d
+    })
+  }
+  const qtyBackspace = () => {
+    qtyPristineRef.current = false
+    setQtyInput((prev) => prev.slice(0, -1))
+  }
+  const qtyClear = () => {
+    qtyPristineRef.current = false
+    setQtyInput("")
+  }
+  const closeQtyDialog = () => {
+    setQtyDialogBarcode(null)
+    focusInput()
+  }
+  const confirmQtyInput = () => {
+    const n = parseInt(qtyInput, 10)
+    if (Number.isFinite(n) && n > 0) confirmQty(n)
   }
 
   const confirmQty = (qty: number) => {
@@ -551,9 +585,9 @@ export default function SayimPage() {
                     onChange={(e) => setBarcodeInput(e.target.value)}
                     placeholder="Barkod okut veya yaz..."
                     className="h-11 font-mono"
+                    type="text"
                     autoFocus
                     autoComplete="off"
-                    inputMode="numeric"
                   />
                   <Button
                     type="button"
@@ -738,14 +772,11 @@ export default function SayimPage() {
         }}
       />
 
-      {/* Adet penceresi */}
+      {/* Adet penceresi: hesap makinesi tuş takımı (normal sayımla aynı) */}
       <Dialog
         open={qtyDialogBarcode !== null}
         onOpenChange={(open) => {
-          if (!open) {
-            setQtyDialogBarcode(null)
-            focusInput()
-          }
+          if (!open) closeQtyDialog()
         }}
       >
         <DialogContent
@@ -753,6 +784,18 @@ export default function SayimPage() {
           onCloseAutoFocus={(e) => {
             e.preventDefault()
             barcodeInputRef.current?.focus()
+          }}
+          onKeyDown={(e) => {
+            if (e.key >= "0" && e.key <= "9") {
+              e.preventDefault()
+              pressQtyDigit(e.key)
+            } else if (e.key === "Backspace") {
+              e.preventDefault()
+              qtyBackspace()
+            } else if (e.key === "Enter") {
+              e.preventDefault()
+              confirmQtyInput()
+            }
           }}
         >
           <DialogHeader>
@@ -762,7 +805,7 @@ export default function SayimPage() {
             </DialogTitle>
           </DialogHeader>
           {qtyDialogBarcode && (
-            <div className="space-y-3">
+            <>
               <div className="rounded-lg border bg-muted/40 px-3 py-2">
                 <p className="text-sm font-medium">
                   {catalogRef.current?.get(qtyDialogBarcode)?.name ?? (
@@ -772,41 +815,90 @@ export default function SayimPage() {
                     </span>
                   )}
                 </p>
-                <p className="font-mono text-xs text-muted-foreground">{qtyDialogBarcode}</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-mono text-xs text-muted-foreground break-all">
+                    {qtyDialogBarcode}
+                  </p>
+                  {items.find((i) => i.barcode === qtyDialogBarcode) && (
+                    <Badge variant="secondary">
+                      Sayımda: {items.find((i) => i.barcode === qtyDialogBarcode)!.qty} adet
+                    </Badge>
+                  )}
+                </div>
+              </div>
+              <div className="h-16 rounded-md border bg-muted/30 flex items-center justify-center font-mono text-4xl font-bold">
+                {qtyInput || <span className="text-muted-foreground text-2xl">adet</span>}
               </div>
               <div className="grid grid-cols-4 gap-2">
                 {QUICK_QTYS.map((q) => (
                   <Button
                     key={q}
-                    variant="outline"
-                    className="h-11 text-base tabular-nums"
-                    onClick={() => confirmQty(q)}
+                    type="button"
+                    variant={qtyInput === String(q) ? "default" : "secondary"}
+                    className="h-11 text-lg font-mono"
+                    onClick={() => {
+                      setQtyInput(String(q))
+                      qtyPristineRef.current = true
+                    }}
                   >
                     {q}
                   </Button>
                 ))}
               </div>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  const n = parseInt(qtyInput, 10)
-                  if (Number.isFinite(n) && n > 0) confirmQty(n)
-                }}
-                className="flex gap-2"
-              >
-                <Input
-                  value={qtyInput}
-                  onChange={(e) => setQtyInput(e.target.value.replace(/\D/g, ""))}
-                  placeholder="Başka adet..."
-                  inputMode="numeric"
-                  className="h-11 text-base"
-                  autoFocus
-                />
-                <Button type="submit" className="h-11">
+              <div className="grid grid-cols-3 gap-2">
+                {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
+                  <Button
+                    key={d}
+                    type="button"
+                    variant="outline"
+                    className="h-14 text-2xl font-mono"
+                    onClick={() => pressQtyDigit(d)}
+                  >
+                    {d}
+                  </Button>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-14 text-lg text-muted-foreground"
+                  onClick={qtyClear}
+                  title="Temizle"
+                >
+                  C
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-14 text-2xl font-mono"
+                  onClick={() => pressQtyDigit("0")}
+                >
+                  0
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-14"
+                  onClick={qtyBackspace}
+                  title="Sil"
+                >
+                  <Delete className="h-6 w-6" />
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Button type="button" variant="outline" className="h-12" onClick={closeQtyDialog}>
+                  İptal
+                </Button>
+                <Button
+                  type="button"
+                  className="h-12 text-lg"
+                  onClick={confirmQtyInput}
+                  disabled={!qtyInput || parseInt(qtyInput, 10) < 1}
+                >
+                  <Plus className="h-5 w-5 mr-1.5" />
                   Ekle
                 </Button>
-              </form>
-            </div>
+              </div>
+            </>
           )}
         </DialogContent>
       </Dialog>
