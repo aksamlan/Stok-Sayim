@@ -472,6 +472,12 @@ export default function SayimPage() {
             </h1>
             <p className="text-xs text-muted-foreground truncate">
               {auth.role === "admin" ? "Yönetici" : auth.counter}
+              {auth.code ? (
+                <>
+                  {" · Kod "}
+                  <span className="font-mono font-semibold text-foreground">{auth.code}</span>
+                </>
+              ) : null}
               {session ? ` · ${session.name}` : ""}
             </p>
             </div>

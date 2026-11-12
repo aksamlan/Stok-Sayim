@@ -32,14 +32,14 @@ import {
   apiJoinNames,
   apiStartVerification,
 } from "@/lib/store-client/api"
-import { clearAuth, loadAuth, saveAuth } from "@/lib/store-client/session"
+import { loadAllAuths, removeAuth, saveAuth, switchAuth } from "@/lib/store-client/session"
 import type { StoreAuth } from "@/lib/store-client/types"
 import { useDarkMode } from "@/lib/store-client/use-dark-mode"
 
 export default function MagazaPage() {
   const router = useRouter()
   const [dark, toggleDark] = useDarkMode()
-  const [existing, setExisting] = useState<StoreAuth | null>(null)
+  const [saved, setSaved] = useState<StoreAuth[]>([])
   const [busy, setBusy] = useState(false)
 
   const [joinCode, setJoinCode] = useState("")
@@ -63,7 +63,7 @@ export default function MagazaPage() {
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
-    setExisting(loadAuth())
+    setSaved(loadAllAuths())
     try {
       const last = JSON.parse(localStorage.getItem("magazaSon") ?? "null")
       if (last?.code) setJoinCode(String(last.code))
@@ -256,41 +256,53 @@ export default function MagazaPage() {
           </Card>
         ) : (
           <>
-            {existing && (
-              <Card className="mb-3 py-0 gap-0 border-primary/30">
-                <CardContent className="px-3 py-2.5 flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{existing.storeName}</p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {existing.role === "admin"
-                        ? "Yönetici"
-                        : `Sayımcı: ${existing.counter}`}{" "}
-                      · Kod {existing.code}
-                    </p>
-                  </div>
-                  <div className="flex gap-1 shrink-0">
-                    <Button
-                      size="sm"
-                      className="h-8"
-                      onClick={() => router.push(target(existing.role))}
-                    >
-                      Devam Et
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 w-8 p-0 text-muted-foreground"
-                      title="Çıkış yap"
-                      onClick={() => {
-                        clearAuth()
-                        setExisting(null)
-                      }}
-                    >
-                      <LogOut className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+            {saved.length > 0 && (
+              <div className="mb-3 space-y-1.5">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Bu cihazda giriş yapılmış mağazalar
+                </p>
+                {saved.map((a) => (
+                  <Card
+                    key={`${a.storeId}|${a.role}|${a.counter}`}
+                    className="py-0 gap-0 border-primary/30"
+                  >
+                    <CardContent className="px-3 py-2.5 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{a.storeName}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {a.role === "admin" ? "Yönetici" : `Sayımcı: ${a.counter}`} · Kod{" "}
+                          <span className="font-mono font-semibold">{a.code}</span>
+                        </p>
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        <Button
+                          size="sm"
+                          className="h-8"
+                          onClick={() => {
+                            switchAuth(a)
+                            router.push(target(a.role))
+                          }}
+                        >
+                          Devam Et
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 w-8 p-0 text-muted-foreground"
+                          title="Bu mağazadan çıkış yap"
+                          aria-label={`${a.storeName} çıkış`}
+                          onClick={() => {
+                            removeAuth(a)
+                            setSaved(loadAllAuths())
+                          }}
+                        >
+                          <LogOut className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             )}
 
             <Tabs defaultValue="join">
