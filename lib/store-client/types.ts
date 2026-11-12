@@ -63,6 +63,8 @@ export type DashboardResult = {
   }[]
   rows: DashboardRow[]
   rowTotal: number
+  // Sunucu saati (ms): panel "x dk önce" hesabını kendi cihaz saatine göre değil buna göre yapar
+  serverNow: number
 }
 
 export type SyncState = {

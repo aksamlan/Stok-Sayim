@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto"
 import type { DatabaseSync } from "node:sqlite"
+import { logActivity } from "./activity"
 import {
   ApiError,
   hashPassword,
@@ -95,6 +96,7 @@ export function joinStore(
   }
   if (verifyPassword(password, row.admin_pw_hash)) {
     markSeen()
+    logActivity(db, row.id, "Yönetici", "login")
     const token = signToken(db, {
       storeId: row.id,
       role: "admin",
@@ -142,6 +144,7 @@ export function joinStore(
       ).run(row.id, counter, pinTyped ? hashPassword(pinTyped) : "", generation)
     }
     markSeen()
+    logActivity(db, row.id, counter, "login")
     const token = signToken(db, {
       storeId: row.id,
       role: "counter",
@@ -263,6 +266,7 @@ export function resetStoreData(
       db.prepare("DELETE FROM sessions WHERE store_id = ?").run(storeId)
       db.prepare("DELETE FROM products WHERE store_id = ?").run(storeId)
       db.prepare("DELETE FROM counters WHERE store_id = ?").run(storeId)
+      db.prepare("DELETE FROM activity_log WHERE store_id = ?").run(storeId)
       db.prepare("UPDATE stores SET catalog_version = catalog_version + 1 WHERE id = ?").run(
         storeId
       )

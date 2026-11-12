@@ -1,5 +1,7 @@
 // Dışa aktarma ve paylaşma yardımcıları: XLSX, CSV ve Web Share.
 
+import { fmtDateTime, todayISO } from "./time"
+
 export interface CountRow {
   barcode: string
   quantity: number
@@ -22,13 +24,9 @@ const STATUS_TEXT: Record<CompareRow["status"], string> = {
 const XLSX_MIME =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
-const todayStr = () => new Date().toISOString().split("T")[0]
+const todayStr = () => todayISO()
 
-const dateTimeStr = () =>
-  new Date().toLocaleString("tr-TR", {
-    dateStyle: "long",
-    timeStyle: "short",
-  })
+const dateTimeStr = () => fmtDateTime()
 
 // Dosya adında sorun çıkarmayacak bir oturum adı üret
 const safeName = (name: string) =>

@@ -2,6 +2,9 @@ FROM node:24-alpine
 
 WORKDIR /app
 
+# KKTC saat dilimi (TZ=Europe/Nicosia) için zoneinfo gerekir
+RUN apk add --no-cache tzdata
+
 RUN corepack enable && corepack prepare pnpm@8.15.0 --activate
 
 COPY package.json pnpm-lock.yaml ./

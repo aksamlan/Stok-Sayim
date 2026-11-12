@@ -69,6 +69,7 @@ import {
   startSync,
 } from "@/lib/store-client/offline"
 import { clearAuth, loadAuth } from "@/lib/store-client/session"
+import { fmtShort } from "@/lib/time"
 import type { CatalogEntry, StoreAuth, SyncState } from "@/lib/store-client/types"
 import { useDarkMode } from "@/lib/store-client/use-dark-mode"
 
@@ -527,7 +528,7 @@ export default function SayimPage() {
                     dead
                       .map(
                         (d) =>
-                          `${d.barcode};${d.qty};${new Date(d.createdAt).toLocaleString("tr-TR")}`
+                          `${d.barcode};${d.qty};${fmtShort(d.createdAt)}`
                       )
                       .join("\r\n")
                   const url = URL.createObjectURL(

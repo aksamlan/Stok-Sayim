@@ -3,6 +3,7 @@
 // tüm verileriyle silinir. Silinmeden 7 gün önce e-posta ile uyarılır (SMTP
 // ayarlıysa). Kontrol, API istekleri üzerinden en fazla 6 saatte bir çalışır.
 
+import { pruneActivity } from "./activity"
 import type { DatabaseSync } from "node:sqlite"
 import { ApiError } from "./auth"
 import { getMeta, setMeta } from "./db"
@@ -108,6 +109,9 @@ export function maybeCleanup(db: DatabaseSync): void {
   const now = Date.now()
   if (now - last < THROTTLE_MS) return
   setMeta(db, "last_cleanup_at", String(now))
+  try {
+    pruneActivity(db, now) // günlük 90 gün: disk şişmez
+  } catch {}
   void runCleanup(db, now).catch((e) =>
     console.error("[cleanup]", e instanceof Error ? e.message : e)
   )

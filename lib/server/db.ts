@@ -57,6 +57,18 @@ CREATE TABLE IF NOT EXISTS counters (
   created_at INTEGER NOT NULL,
   PRIMARY KEY (store_id, name)
 );
+-- Hareket günlüğü: kim ne zaman ne yaptı (giriş, sayım başlat/bitir, liste yükleme...).
+-- Okutmalar zaten scan_events'te tutulur; ikisi birlikte "hareket geçmişi"ni verir.
+CREATE TABLE IF NOT EXISTS activity_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  store_id TEXT NOT NULL,
+  at INTEGER NOT NULL,
+  actor TEXT NOT NULL,
+  action TEXT NOT NULL,
+  detail TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_activity_store_at ON activity_log(store_id, at);
+CREATE INDEX IF NOT EXISTS idx_events_recent ON scan_events(store_id, received_at);
 `
 
 // KURAL: SCHEMA her zaman EN GÜNCEL şemayı tanımlar (yeni kurulum doğrudan
@@ -120,6 +132,8 @@ export function openDatabase(dbPath: string): DatabaseSync {
   const db = new DatabaseSync(dbPath)
   if (dbPath !== ":memory:") {
     db.exec("PRAGMA journal_mode=WAL")
+    // WAL dosyası yük sonrası şişkin kalmasın: checkpoint sonrası en fazla 16 MB
+    db.exec("PRAGMA journal_size_limit=16777216")
   }
   db.exec("PRAGMA foreign_keys=ON")
   // Tazelik tespiti SCHEMA'dan ÖNCE yapılmalı: stores tablosu hiç yoksa bu

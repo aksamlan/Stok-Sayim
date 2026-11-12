@@ -107,6 +107,7 @@ export function deleteStore(db: DatabaseSync, storeId: string): void {
     db.prepare("DELETE FROM products WHERE store_id = ?").run(storeId)
     db.prepare("DELETE FROM sessions WHERE store_id = ?").run(storeId)
     db.prepare("DELETE FROM counters WHERE store_id = ?").run(storeId)
+    db.prepare("DELETE FROM activity_log WHERE store_id = ?").run(storeId)
     const r = db.prepare("DELETE FROM stores WHERE id = ?").run(storeId)
     if (Number(r.changes) === 0) throw new ApiError(404, "Mağaza bulunamadı")
     db.exec("COMMIT")

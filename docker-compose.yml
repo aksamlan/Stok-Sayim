@@ -5,6 +5,9 @@ services:
       # Varsayılan: yalnız bu sunucudan erişim (önüne Caddy/Nginx koy).
       # Alan adsız, doğrudan IP:3009 ile kullanacaksan "3009:3009" yap.
       - "127.0.0.1:3009:3009"
+    environment:
+      # Sunucu Almanya'da olsa da günlük/log saatleri KKTC saatiyle
+      - TZ=Europe/Nicosia
     volumes:
       - ./data:/app/data
     # E-posta (SMTP) kullanacaksan bu satırı aç ve dosyayı oluştur:

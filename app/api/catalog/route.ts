@@ -1,3 +1,4 @@
+import { logActivity } from "@/lib/server/activity"
 import { requireAuth } from "@/lib/server/auth"
 import {
   catalogSize,
@@ -34,5 +35,7 @@ export const PUT = handle(async (req) => {
   const db = getDb()
   const auth = requireAuth(db, req, "admin")
   const body = await readBody<{ items: CatalogItem[] }>(req)
-  return json(replaceCatalog(db, auth.storeId, body.items))
+  const r = replaceCatalog(db, auth.storeId, body.items)
+  logActivity(db, auth.storeId, "Yönetici", "catalog_upload", `${r.count} ürün`)
+  return json(r)
 })

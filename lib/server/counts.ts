@@ -35,6 +35,7 @@ export type DashboardResult = {
   }[]
   rows: DashboardRow[]
   rowTotal: number
+  serverNow: number
 }
 
 function assertActiveSession(db: DatabaseSync, storeId: string, sessionId: string) {
@@ -121,7 +122,7 @@ export function myCounts(
 // arasında temp tablo çakışması olmaz.
 const ROWS_CTE = `
 WITH agg AS (
-  SELECT barcode, SUM(qty) AS counted
+  SELECT barcode, SUM(qty) AS counted, MAX(received_at) AS last_at
   FROM scan_events
   WHERE store_id = ? AND session_id = ?
   GROUP BY barcode
@@ -129,17 +130,17 @@ WITH agg AS (
 all_rows AS (
   SELECT p.barcode AS barcode, p.name AS name, p.category AS category,
          p.expected_qty AS expected, COALESCE(a.counted, 0) AS counted,
-         1 AS in_catalog
+         1 AS in_catalog, a.last_at AS last_at
   FROM products p LEFT JOIN agg a ON a.barcode = p.barcode
   WHERE p.store_id = ?
   UNION ALL
-  SELECT a.barcode, NULL, NULL, NULL, a.counted, 0
+  SELECT a.barcode, NULL, NULL, NULL, a.counted, 0, a.last_at
   FROM agg a
   WHERE a.counted <> 0
     AND NOT EXISTS (SELECT 1 FROM products p WHERE p.store_id = ? AND p.barcode = a.barcode)
 ),
 statused AS (
-  SELECT barcode, name, category, expected, counted,
+  SELECT barcode, name, category, expected, counted, last_at,
     CASE
       WHEN in_catalog = 0 THEN 'only-count'
       WHEN counted = 0 THEN 'only-stock'
@@ -191,7 +192,8 @@ export function dashboard(
     const rows = db
       .prepare(
         `SELECT barcode, name, category, expected, counted, status FROM temp.dash_rows ${whereSql}
-         ORDER BY (status = 'only-count') DESC, category IS NULL, category, barcode
+         ORDER BY (counted <> 0) DESC, last_at DESC, (status = 'only-count') DESC,
+                  category IS NULL, category, barcode
          LIMIT ? OFFSET ?`
       )
       .all(...whereParams, pageSize, (page - 1) * pageSize) as DashboardRow[]
@@ -223,12 +225,18 @@ export function dashboard(
       )
       .get(storeId, sessionId) as { n: number }
 
+    // Çeşit = net adedi 0'dan büyük barkodlar (bir ürün silinince/azaltılınca
+    // adet gibi çeşit sayısı da düşer). Son okutma SUNUCU saatiyle (received_at):
+    // telefon saati yanlış olsa bile "1 saat önce" gibi hatalı görünmez.
     const byCounter = db
       .prepare(
-        `SELECT counter, COALESCE(SUM(qty), 0) AS qty, COUNT(DISTINCT barcode) AS distinct_n,
-                MAX(created_at) AS lastAt
-         FROM scan_events WHERE store_id = ? AND session_id = ?
-         GROUP BY counter ORDER BY qty DESC`
+        `SELECT counter, COALESCE(SUM(q), 0) AS qty, COALESCE(SUM(q > 0), 0) AS distinct_n,
+                MAX(last_at) AS lastAt
+         FROM (
+           SELECT counter, barcode, SUM(qty) AS q, MAX(received_at) AS last_at
+           FROM scan_events WHERE store_id = ? AND session_id = ?
+           GROUP BY counter, barcode
+         ) GROUP BY counter ORDER BY qty DESC`
       )
       .all(storeId, sessionId) as {
       counter: string
@@ -298,5 +306,6 @@ function buildResult(
     })),
     rows,
     rowTotal,
+    serverNow: Date.now(),
   }
 }

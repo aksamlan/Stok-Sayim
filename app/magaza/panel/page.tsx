@@ -29,6 +29,7 @@ import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Toaster, toast } from "sonner"
 import { PoweredByStokzen, StokzenWordmark } from "@/components/stokzen"
+import { ActivityLog } from "@/components/activity-log"
 import { CatalogUpload } from "@/components/catalog-upload"
 import {
   AlertDialog,
@@ -110,8 +111,8 @@ const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   },
 }
 
-function timeAgo(ts: number): string {
-  const s = Math.max(0, Math.floor((Date.now() - ts) / 1000))
+function timeAgo(ts: number, now: number): string {
+  const s = Math.max(0, Math.floor((now - ts) / 1000))
   if (s < 60) return "az önce"
   if (s < 3600) return `${Math.floor(s / 60)} dk önce`
   if (s < 86400) return `${Math.floor(s / 3600)} sa önce`
@@ -131,6 +132,8 @@ export default function PanelPage() {
   const [newSessionOpen, setNewSessionOpen] = useState(false)
   const [newSessionName, setNewSessionName] = useState("")
   const [closeConfirm, setCloseConfirm] = useState(false)
+  // Sunucu saati − cihaz saati: "x dk önce" cihaz saatinden bağımsız doğru olsun
+  const [skew, setSkew] = useState(0)
   const [resetMode, setResetMode] = useState<"counts" | "all" | null>(null)
   const [resetText, setResetText] = useState("")
   const [resetBusy, setResetBusy] = useState(false)
@@ -227,6 +230,7 @@ export default function PanelPage() {
         page,
       })
       setDash(d)
+      if (d.serverNow) setSkew(d.serverNow - Date.now())
     } catch (err) {
       handleAuthError(err)
     }
@@ -654,7 +658,7 @@ export default function PanelPage() {
                           </TableCell>
                           <TableCell className="py-1.5 text-right tabular-nums">{c.distinct}</TableCell>
                           <TableCell className="py-1.5 text-right text-xs text-muted-foreground">
-                            {c.lastAt ? timeAgo(c.lastAt) : "henüz okutmadı"}
+                            {c.lastAt ? timeAgo(c.lastAt, Date.now() + skew) : "henüz okutmadı"}
                           </TableCell>
                           <TableCell className="py-1.5">
                             <Button
@@ -688,6 +692,13 @@ export default function PanelPage() {
                 )}
               </CardContent>
             </Card>
+
+            <ActivityLog
+              token={auth.token}
+              sessionId={viewSession?.id}
+              people={counterRows.map((c) => c.counter)}
+              onError={handleAuthError}
+            />
 
             {/* Kategori kırılımı */}
             {hasCategories && (

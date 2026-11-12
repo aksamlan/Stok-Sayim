@@ -200,3 +200,24 @@ export function apiDashboardExport(
   const q = new URLSearchParams({ sessionId, page: String(page) })
   return request(`/api/dashboard/export?${q}`, { token })
 }
+
+export type ActivityEntry = {
+  at: number
+  actor: string
+  action: string
+  barcode: string | null
+  qty: number | null
+  name: string | null
+  detail: string | null
+}
+
+export function apiActivity(
+  token: string,
+  opts: { sessionId?: string; actor?: string; limit?: number }
+): Promise<{ entries: ActivityEntry[]; serverNow: number }> {
+  const q = new URLSearchParams()
+  if (opts.sessionId) q.set("sessionId", opts.sessionId)
+  if (opts.actor) q.set("actor", opts.actor)
+  q.set("limit", String(opts.limit ?? 50))
+  return request(`/api/activity?${q.toString()}`, { token })
+}
