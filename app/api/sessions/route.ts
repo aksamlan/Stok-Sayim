@@ -7,7 +7,11 @@ import { closeSession, createSession, listSessions } from "@/lib/server/stores"
 export const GET = handle((req) => {
   const db = getDb()
   const auth = requireAuth(db, req)
-  return json({ sessions: listSessions(db, auth.storeId) })
+  const store = db.prepare("SELECT name FROM stores WHERE id = ?").get(auth.storeId) as
+    | { name: string }
+    | undefined
+  // storeName: mağaza adı değişirse cihazlar kayıtlı adı tazeler
+  return json({ sessions: listSessions(db, auth.storeId), storeName: store?.name })
 })
 
 export const POST = handle(async (req) => {

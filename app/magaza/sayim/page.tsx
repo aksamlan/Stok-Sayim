@@ -68,7 +68,7 @@ import {
   seedMine,
   startSync,
 } from "@/lib/store-client/offline"
-import { clearAuth, loadAuth } from "@/lib/store-client/session"
+import { clearAuth, loadAuth, saveAuth } from "@/lib/store-client/session"
 import { fmtShort } from "@/lib/time"
 import type { CatalogEntry, StoreAuth, SyncState } from "@/lib/store-client/types"
 import { useDarkMode } from "@/lib/store-client/use-dark-mode"
@@ -160,8 +160,13 @@ export default function SayimPage() {
 
       // Aktif oturumu bul (çevrimdışıysa son bilineni kullan)
       try {
-        const { sessions } = await apiSessions(a.token)
+        const { sessions, storeName } = await apiSessions(a.token)
         if (cancelled) return
+        if (storeName && storeName !== a.storeName) {
+          const next = { ...a, storeName }
+          saveAuth(next)
+          setAuth(next)
+        }
         const active = sessions.find((s) => s.status === "active")
         if (active) {
           setSession({ id: active.id, name: active.name })

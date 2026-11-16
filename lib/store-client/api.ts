@@ -112,7 +112,9 @@ export function apiResetCounterPin(token: string, name: string): Promise<{ ok: t
   })
 }
 
-export function apiSessions(token: string): Promise<{ sessions: SessionInfo[] }> {
+export function apiSessions(
+  token: string
+): Promise<{ sessions: SessionInfo[]; storeName?: string }> {
   return request("/api/sessions", { token })
 }
 

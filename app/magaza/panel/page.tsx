@@ -85,7 +85,7 @@ import {
   apiResetCounterPin,
   apiSessions,
 } from "@/lib/store-client/api"
-import { clearAuth, loadAuth } from "@/lib/store-client/session"
+import { clearAuth, loadAuth, saveAuth } from "@/lib/store-client/session"
 import type {
   DashboardResult,
   SessionInfo,
@@ -178,8 +178,13 @@ export default function PanelPage() {
   const refreshSessions = useCallback(async () => {
     if (!auth) return
     try {
-      const { sessions } = await apiSessions(auth.token)
+      const { sessions, storeName } = await apiSessions(auth.token)
       setSessions(sessions)
+      if (storeName && storeName !== auth.storeName) {
+        const next = { ...auth, storeName }
+        saveAuth(next) // mağaza adı panelden değiştirildiyse cihazdaki kayıt tazelenir
+        setAuth(next)
+      }
     } catch (err) {
       if (!handleAuthError(err)) setSessions((s) => s ?? [])
     }
