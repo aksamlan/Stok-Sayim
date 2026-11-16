@@ -295,3 +295,23 @@ export function resetStoreData(
     throw e
   }
 }
+
+// Mağaza adını değiştirir (kod ve şifreler aynı kalır). Yönetici paneli ve /yonetim kullanır.
+export function renameStore(
+  db: DatabaseSync,
+  storeId: string,
+  newName: string,
+  actor = "Yönetici"
+): string {
+  const name = String(newName ?? "").trim().replace(/\s+/g, " ")
+  if (!name) throw new ApiError(400, "Mağaza adı gerekli")
+  if (name.length > 60) throw new ApiError(400, "Mağaza adı en fazla 60 karakter olabilir")
+  const old = db.prepare("SELECT name FROM stores WHERE id = ?").get(storeId) as
+    | { name: string }
+    | undefined
+  if (!old) throw new ApiError(404, "Mağaza bulunamadı")
+  if (old.name === name) return name
+  db.prepare("UPDATE stores SET name = ? WHERE id = ?").run(name, storeId)
+  logActivity(db, storeId, actor, "store_rename", `${old.name} → ${name}`)
+  return name
+}

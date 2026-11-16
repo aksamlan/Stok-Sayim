@@ -10,6 +10,7 @@ import {
   Copy,
   Download,
   Eraser,
+  Pencil,
   MoreVertical,
   Trash2,
   FileSpreadsheet,
@@ -30,6 +31,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { Toaster, toast } from "sonner"
 import { PoweredByStokzen, StokzenWordmark } from "@/components/stokzen"
 import { ActivityLog } from "@/components/activity-log"
+import { RenameStoreDialog } from "@/components/rename-store-dialog"
 import { CatalogUpload } from "@/components/catalog-upload"
 import { CounterDetailDialog } from "@/components/counter-detail-dialog"
 import {
@@ -77,6 +79,7 @@ import {
   AuthExpiredError,
   apiCatalogCount,
   apiCloseSession,
+  apiRenameStore,
   apiResetStore,
   apiCounters,
   apiCreateSession,
@@ -135,6 +138,7 @@ export default function PanelPage() {
   const [closeConfirm, setCloseConfirm] = useState(false)
   // Sunucu saati − cihaz saati: "x dk önce" cihaz saatinden bağımsız doğru olsun
   const [skew, setSkew] = useState(0)
+  const [renameOpen, setRenameOpen] = useState(false)
   const [detailCounter, setDetailCounter] = useState<string | null>(null)
   const [resetMode, setResetMode] = useState<"counts" | "all" | null>(null)
   const [resetText, setResetText] = useState("")
@@ -406,6 +410,15 @@ export default function PanelPage() {
               <span className="text-muted-foreground font-normal truncate">
                 · {auth.storeName}
               </span>
+              <button
+                type="button"
+                onClick={() => setRenameOpen(true)}
+                className="shrink-0 rounded p-1 text-muted-foreground hover:text-primary"
+                title="Mağaza adını değiştir"
+                aria-label="Mağaza adını değiştir"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
             </h1>
             <p className="text-xs text-muted-foreground">
               Yönetici Panosu · Mağaza kodu:{" "}
@@ -975,6 +988,24 @@ export default function PanelPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <RenameStoreDialog
+        open={renameOpen}
+        currentName={auth.storeName}
+        onClose={() => setRenameOpen(false)}
+        onSubmit={async (name) => {
+          try {
+            const r = await apiRenameStore(auth.token, name)
+            const next = { ...auth, storeName: r.name }
+            saveAuth(next)
+            setAuth(next)
+            toast.success(`Mağaza adı "${r.name}" oldu`)
+          } catch (err) {
+            if (handleAuthError(err)) return
+            throw err
+          }
+        }}
+      />
 
       <CounterDetailDialog
         token={auth.token}

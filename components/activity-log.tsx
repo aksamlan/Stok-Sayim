@@ -28,6 +28,10 @@ function describe(e: ActivityEntry): { text: string; tone: "add" | "remove" | "i
       return { text: `sayımları temizledi${e.detail ? ` (${e.detail})` : ""}`, tone: "remove" }
     case "reset_all":
       return { text: `mağazayı komple sıfırladı${e.detail ? ` (${e.detail})` : ""}`, tone: "remove" }
+    case "import_counts":
+      return { text: e.detail ?? "sayım aktarıldı", tone: "info" }
+    case "store_rename":
+      return { text: `mağaza adını değiştirdi: ${e.detail ?? ""}`, tone: "info" }
     case "counter_reset":
       return { text: `PIN sıfırladı${e.detail ? `: ${e.detail}` : ""}`, tone: "info" }
     default:

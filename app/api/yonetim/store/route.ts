@@ -1,6 +1,7 @@
 import { ApiError, requireAuth } from "@/lib/server/auth"
 import { getDb } from "@/lib/server/db"
 import { handle, json, readBody } from "@/lib/server/http"
+import { renameStore } from "@/lib/server/stores"
 import { deleteStore, resetStorePassword } from "@/lib/server/superadmin"
 
 export const PATCH = handle(async (req) => {
@@ -25,4 +26,11 @@ export const DELETE = handle((req) => {
   if (!id) throw new ApiError(400, "id gerekli")
   deleteStore(db, id)
   return json({ ok: true })
+})
+
+export const PUT = handle(async (req) => {
+  const db = getDb()
+  requireAuth(db, req, "super")
+  const body = await readBody<{ storeId: string; name: string }>(req)
+  return json({ name: renameStore(db, body.storeId ?? "", body.name ?? "", "Platform yöneticisi") })
 })

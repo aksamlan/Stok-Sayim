@@ -240,3 +240,7 @@ export function apiCounterDetail(
   q.set("limit", String(opts.limit ?? 100))
   return request(`/api/counter-detail?${q.toString()}`, { token })
 }
+
+export function apiRenameStore(token: string, name: string): Promise<{ name: string }> {
+  return request("/api/store/rename", { method: "POST", token, body: { name } })
+}

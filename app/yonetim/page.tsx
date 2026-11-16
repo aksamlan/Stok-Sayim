@@ -6,6 +6,7 @@ import {
   Loader2,
   LogOut,
   Moon,
+  Pencil,
   ShieldCheck,
   Store,
   Sun,
@@ -15,6 +16,7 @@ import Link from "next/link"
 import { useCallback, useEffect, useState } from "react"
 import { Toaster, toast } from "sonner"
 import { BrandSettings } from "@/components/brand-settings"
+import { RenameStoreDialog } from "@/components/rename-store-dialog"
 import { PoweredByStokzen, StokzenWordmark } from "@/components/stokzen"
 import {
   AlertDialog,
@@ -113,6 +115,7 @@ export default function YonetimPage() {
   const [busy, setBusy] = useState(false)
   const [data, setData] = useState<Overview | null>(null)
   const [resetTarget, setResetTarget] = useState<StoreRow | null>(null)
+  const [renameTarget, setRenameTarget] = useState<StoreRow | null>(null)
   const [resetWhich, setResetWhich] = useState<"count" | "admin">("count")
   const [resetPw, setResetPw] = useState("")
   const [deleteTarget, setDeleteTarget] = useState<StoreRow | null>(null)
@@ -364,6 +367,16 @@ export default function YonetimPage() {
                                   variant="ghost"
                                   size="icon"
                                   className="h-7 w-7"
+                                  title="Mağaza adını değiştir"
+                                  aria-label="Mağaza adını değiştir"
+                                  onClick={() => setRenameTarget(s)}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
                                   title="Şifre sıfırla"
                                   onClick={() => {
                                     setResetTarget(s)
@@ -475,6 +488,22 @@ export default function YonetimPage() {
       </div>
 
       {/* Şifre sıfırlama */}
+      <RenameStoreDialog
+        open={renameTarget !== null}
+        currentName={renameTarget?.name ?? ""}
+        onClose={() => setRenameTarget(null)}
+        onSubmit={async (name) => {
+          if (!token || !renameTarget) return
+          await api("/api/yonetim/store", {
+            method: "PUT",
+            token,
+            body: { storeId: renameTarget.id, name },
+          })
+          toast.success(`Mağaza adı "${name}" oldu`)
+          await refresh()
+        }}
+      />
+
       <Dialog open={resetTarget !== null} onOpenChange={(o) => !o && setResetTarget(null)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>

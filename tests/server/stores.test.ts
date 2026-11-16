@@ -192,3 +192,19 @@ test("komple sıfırla: ürün, sayım, okutma ve sayımcılar silinir; diğer m
   // diğer mağaza dokunulmamış
   expect(db.prepare("SELECT COUNT(*) c FROM products WHERE store_id=?").get(other.storeId)).toMatchObject({ c: 1 })
 })
+
+test("mağaza adı değiştirilebilir: boşlukları toplar, boş/uzun reddeder, günlüğe yazar, kod/şifre değişmez", async () => {
+  const { renameStore } = await import("../../lib/server/stores")
+  const { listActivity } = await import("../../lib/server/activity")
+  const { db, storeId, code } = setup()
+  expect(renameStore(db, storeId, "  Unimar   Merkez ")).toBe("Unimar Merkez")
+  expect(joinStore(db, code, "admin123", "", "").storeName).toBe("Unimar Merkez")
+  expect(() => renameStore(db, storeId, "   ")).toThrow()
+  expect(() => renameStore(db, storeId, "x".repeat(61))).toThrow()
+  expect(() => renameStore(db, "yok", "A")).toThrow()
+  expect(listActivity(db, storeId, {}).some((e) => e.action === "store_rename")).toBe(true)
+  // aynı ad: günlük şişmez
+  const before = listActivity(db, storeId, {}).length
+  renameStore(db, storeId, "Unimar Merkez")
+  expect(listActivity(db, storeId, {}).length).toBe(before)
+})
