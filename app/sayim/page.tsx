@@ -6,6 +6,7 @@ import { Plus, Minus, Trash2, Download, Upload, Moon, Sun, Search, Volume2, Volu
 import { Toaster, toast } from "sonner"
 import { PoweredByStokzen, StokzenLogo } from "@/components/stokzen"
 import { loadAuth } from "@/lib/store-client/session"
+import { fmtQty, parseQtyInput, round2 } from "@/lib/qty"
 import type { StoreAuth } from "@/lib/store-client/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -280,12 +281,12 @@ function InventoryCounterContent() {
       prevItems
         .map(item =>
           item.barcode === barcode
-            ? { ...item, quantity: item.quantity - qty }
+            ? { ...item, quantity: round2(item.quantity - qty) }
             : item
         )
         .filter(item => item.quantity > 0)
     )
-    toast.info(`${barcode} geri alındı (-${qty})`)
+    toast.info(`${barcode} geri alındı (-${fmtQty(qty)})`)
   }, [])
 
   // Add barcode to list (shared logic)
@@ -296,7 +297,7 @@ function InventoryCounterContent() {
     localStorage.setItem("inventoryLastScanned", barcode)
 
     const prevQty = itemsRef.current.find(item => item.barcode === barcode)?.quantity ?? 0
-    const newQty = prevQty + qty
+    const newQty = round2(prevQty + qty)
 
     setItems(prevItems => {
       const existingIndex = prevItems.findIndex(item => item.barcode === barcode)
@@ -305,7 +306,7 @@ function InventoryCounterContent() {
         const newItems = [...prevItems]
         newItems[existingIndex] = {
           ...newItems[existingIndex],
-          quantity: newItems[existingIndex].quantity + qty
+          quantity: round2(newItems[existingIndex].quantity + qty)
         }
         return newItems
       } else {
@@ -346,15 +347,29 @@ function InventoryCounterContent() {
   }, [openQtyDialog])
 
   // On-screen numpad handlers for the quantity popup
+  // Virgülden sonra en fazla 2 hane (kilolu ürün: 2,5)
   const pressDialogDigit = (d: string) => {
     setDialogQty(prev => {
       if (dialogPristineRef.current) {
         dialogPristineRef.current = false
         return d
       }
-      if (prev === "0" || prev === "") return d
-      if (prev.length >= 5) return prev
+      if (prev === "0") return d
+      const comma = prev.indexOf(",")
+      if (comma >= 0) return prev.length - comma - 1 >= 2 ? prev : prev + d
+      if (prev.length >= 6) return prev
       return prev + d
+    })
+  }
+
+  const pressDialogComma = () => {
+    setDialogQty(prev => {
+      if (dialogPristineRef.current) {
+        dialogPristineRef.current = false
+        return "0,"
+      }
+      if (prev.includes(",")) return prev
+      return (prev || "0") + ","
     })
   }
 
@@ -376,7 +391,8 @@ function InventoryCounterContent() {
 
   const confirmQtyDialog = () => {
     if (!pendingBarcode) return
-    const qty = Math.max(1, parseInt(dialogQty) || 1)
+    const n = parseQtyInput(dialogQty)
+    const qty = Number.isFinite(n) && n >= 0.01 ? n : 1
     addBarcodeToList(pendingBarcode, qty)
     closeQtyDialog()
   }
@@ -580,7 +596,7 @@ function InventoryCounterContent() {
     setItems(prevItems =>
       prevItems.map(item =>
         item.barcode === barcode
-          ? { ...item, quantity: item.quantity + 1 }
+          ? { ...item, quantity: round2(item.quantity + 1) }
           : item
       )
     )
@@ -590,8 +606,8 @@ function InventoryCounterContent() {
   const confirmDecrement = (barcode: string) => {
     setItems(prevItems =>
       prevItems.map(item =>
-        item.barcode === barcode && item.quantity > 1
-          ? { ...item, quantity: item.quantity - 1 }
+        item.barcode === barcode && item.quantity - 1 >= 0.01
+          ? { ...item, quantity: round2(item.quantity - 1) }
           : item
       )
     )
@@ -791,12 +807,12 @@ function InventoryCounterContent() {
       const parts = lines[i].split(delimiter)
       if (parts.length >= 2) {
         const barcode = parts[0].trim()
-        const quantity = parseInt(parts[1].trim())
+        const quantity = parseQtyInput(parts[1].trim())
         
-        if (barcode && !isNaN(quantity) && quantity > 0) {
+        if (barcode && !isNaN(quantity) && quantity >= 0.01) {
           const existingIndex = parsedItems.findIndex(item => item.barcode === barcode)
           if (existingIndex >= 0) {
-            parsedItems[existingIndex].quantity += quantity
+            parsedItems[existingIndex].quantity = round2(parsedItems[existingIndex].quantity + quantity)
           } else {
             parsedItems.push({ barcode, quantity })
           }
@@ -829,7 +845,7 @@ function InventoryCounterContent() {
         for (const importedItem of importedItems) {
           const existingIndex = mergedItems.findIndex(item => item.barcode === importedItem.barcode)
           if (existingIndex >= 0) {
-            mergedItems[existingIndex].quantity += importedItem.quantity
+            mergedItems[existingIndex].quantity = round2(mergedItems[existingIndex].quantity + importedItem.quantity)
           } else {
             mergedItems.push(importedItem)
           }
@@ -905,7 +921,7 @@ function InventoryCounterContent() {
   )
 
   // Calculate total quantity
-  const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0)
+  const totalQuantity = round2(items.reduce((sum, item) => sum + item.quantity, 0))
   const totalUniqueItems = items.length
 
   // Comparison stats
@@ -1128,7 +1144,7 @@ function InventoryCounterContent() {
             </div>
             {items.find(i => i.barcode === lastScannedPersistent) && (
               <Badge variant="secondary" className="font-mono text-sm shrink-0">
-                {items.find(i => i.barcode === lastScannedPersistent)?.quantity} adet
+                {fmtQty(items.find(i => i.barcode === lastScannedPersistent)?.quantity ?? 0)} adet
               </Badge>
             )}
           </div>
@@ -1268,6 +1284,9 @@ function InventoryCounterContent() {
               if (e.key >= "0" && e.key <= "9") {
                 e.preventDefault()
                 pressDialogDigit(e.key)
+              } else if (e.key === "," || e.key === ".") {
+                e.preventDefault()
+                pressDialogComma()
               } else if (e.key === "Backspace") {
                 e.preventDefault()
                 dialogBackspace()
@@ -1286,7 +1305,7 @@ function InventoryCounterContent() {
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <span className="font-mono font-bold break-all">{pendingBarcode}</span>
               {pendingExisting && (
-                <Badge variant="secondary">Listede: {pendingExisting.quantity} adet</Badge>
+                <Badge variant="secondary">Listede: {fmtQty(pendingExisting.quantity)} adet</Badge>
               )}
             </div>
             <div className="h-16 rounded-md border bg-muted/30 flex items-center justify-center font-mono text-4xl font-bold">
@@ -1320,6 +1339,8 @@ function InventoryCounterContent() {
                   {d}
                 </Button>
               ))}
+            </div>
+            <div className="grid grid-cols-4 gap-2">
               <Button
                 type="button"
                 variant="outline"
@@ -1336,6 +1357,16 @@ function InventoryCounterContent() {
                 onClick={() => pressDialogDigit("0")}
               >
                 0
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-14 text-2xl font-mono bg-transparent"
+                onClick={pressDialogComma}
+                title="Virgül (kilolu ürün: 2,5)"
+                aria-label="Virgül"
+              >
+                ,
               </Button>
               <Button
                 type="button"
@@ -1360,7 +1391,7 @@ function InventoryCounterContent() {
                 type="button"
                 className="h-12 text-lg"
                 onClick={confirmQtyDialog}
-                disabled={!dialogQty || parseInt(dialogQty) < 1}
+                disabled={!(parseQtyInput(dialogQty) >= 0.01)}
               >
                 <Plus className="h-5 w-5 mr-1.5" />
                 Ekle
@@ -1423,7 +1454,7 @@ function InventoryCounterContent() {
               <div className="flex gap-2">
                 <div className="rounded-lg border bg-card px-3 py-1.5 min-w-[84px]">
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground leading-tight">Toplam Ürün</p>
-                  <p className="text-lg font-bold leading-snug tabular-nums">{totalQuantity}</p>
+                  <p className="text-lg font-bold leading-snug tabular-nums">{fmtQty(totalQuantity)}</p>
                 </div>
                 <div className="rounded-lg border bg-card px-3 py-1.5 min-w-[84px]">
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground leading-tight">Farklı Barkod</p>
@@ -1533,7 +1564,7 @@ function InventoryCounterContent() {
                             className={`transition-colors duration-300 ${lastScanned === item.barcode ? "bg-primary/15" : item.barcode === lastScannedPersistent ? "bg-primary/5" : ""}`}
                           >
                             <TableCell className="font-mono text-[13px] px-3 py-1.5">{item.barcode}</TableCell>
-                            <TableCell className="text-center font-bold tabular-nums py-1.5">{item.quantity}</TableCell>
+                            <TableCell className="text-center font-bold tabular-nums py-1.5">{fmtQty(item.quantity)}</TableCell>
                             <TableCell className="px-3 py-1.5">
                               <div className="flex justify-end gap-1">
                                 <Button
@@ -1541,7 +1572,7 @@ function InventoryCounterContent() {
                                   size="icon"
                                   className="h-7 w-7 bg-transparent"
                                   onClick={() => setDecrementConfirmBarcode(item.barcode)}
-                                  disabled={item.quantity <= 1}
+                                  disabled={item.quantity - 1 < 0.01}
                                 >
                                   <Minus className="h-3 w-3" />
                                 </Button>
@@ -1605,7 +1636,7 @@ function InventoryCounterContent() {
                       <p className="text-sm text-muted-foreground">Stok dosyanızı yükleyin</p>
                     ) : (
                       <p className="text-sm">
-                        <span className="font-bold">{stockItems.length}</span> ürün · toplam <span className="font-bold">{stockItems.reduce((s, i) => s + i.quantity, 0)}</span> adet
+                        <span className="font-bold">{stockItems.length}</span> ürün · toplam <span className="font-bold">{fmtQty(stockItems.reduce((s, i) => s + i.quantity, 0))}</span> adet
                       </p>
                     )}
                   </div>
@@ -1750,13 +1781,13 @@ function InventoryCounterContent() {
                             className={getStatusStyle(item.status)}
                           >
                             <TableCell className="font-mono text-[13px] px-3 py-1.5">{item.barcode}</TableCell>
-                            <TableCell className="text-center py-1.5 tabular-nums">{item.stockQty || "-"}</TableCell>
-                            <TableCell className="text-center py-1.5 tabular-nums">{item.countQty || "-"}</TableCell>
+                            <TableCell className="text-center py-1.5 tabular-nums">{item.stockQty ? fmtQty(item.stockQty) : "-"}</TableCell>
+                            <TableCell className="text-center py-1.5 tabular-nums">{item.countQty ? fmtQty(item.countQty) : "-"}</TableCell>
                             <TableCell className="text-center font-bold py-1.5 tabular-nums">
                               {item.status === "match" ? "0" :
-                               item.status === "only-stock" ? `-${item.stockQty}` :
-                               item.status === "only-count" ? `+${item.countQty}` :
-                               (item.countQty - item.stockQty > 0 ? "+" : "") + (item.countQty - item.stockQty)}
+                               item.status === "only-stock" ? `-${fmtQty(item.stockQty)}` :
+                               item.status === "only-count" ? `+${fmtQty(item.countQty)}` :
+                               (item.countQty - item.stockQty > 0 ? "+" : "") + fmtQty(item.countQty - item.stockQty)}
                             </TableCell>
                             <TableCell className="text-right px-3 py-1.5">
                               {getStatusBadge(item.status)}

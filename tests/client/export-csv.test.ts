@@ -26,3 +26,12 @@ test("negative numbers stay plain", () => {
   // fark sütunu -7: tırnaksız, başına ' konmaz
   expect(line).toContain(";-7;")
 })
+
+test("kilolu ürün: CSV'de ondalık virgül, fark yuvarlanır", async () => {
+  const { countToCSV, compareToCSV } = await import("../../lib/export")
+  expect(countToCSV([{ barcode: "1", quantity: 2.5 }, { barcode: "2", quantity: 3 }])).toBe(
+    "Barkod;Adet\r\n1;2,5\r\n2;3"
+  )
+  const csv = compareToCSV([{ barcode: "9", stockQty: 0.1, countQty: 0.3, status: "difference" }])
+  expect(csv).toContain("9;0,1;0,3;+0,2;") // 0.3-0.1 = 0.19999… değil +0,2
+})

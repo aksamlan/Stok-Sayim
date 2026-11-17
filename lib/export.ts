@@ -1,6 +1,6 @@
 // Dışa aktarma ve paylaşma yardımcıları: XLSX, CSV ve Web Share.
 
-import { csvQty, round2 } from "./qty"
+import { csvQty, fmtQty, round2 } from "./qty"
 import { fmtDateTime, todayISO } from "./time"
 
 export interface CountRow {
@@ -57,19 +57,21 @@ const downloadBlob = (blob: Blob, filename: string) => {
   URL.revokeObjectURL(url)
 }
 
-const diffText = (r: CompareRow) =>
-  r.status === "match"
+const diffText = (r: CompareRow) => {
+  const d = round2(r.countQty - r.stockQty)
+  return r.status === "match"
     ? "0"
     : r.status === "only-stock"
-      ? `-${r.stockQty}`
+      ? `-${csvQty(r.stockQty)}`
       : r.status === "only-count"
-        ? `+${r.countQty}`
-        : `${r.countQty - r.stockQty > 0 ? "+" : ""}${r.countQty - r.stockQty}`
+        ? `+${csvQty(r.countQty)}`
+        : `${d > 0 ? "+" : ""}${csvQty(d)}`
+}
 
 // ---------------------------------------------------------------- CSV
 
 export const countToCSV = (items: CountRow[]) =>
-  ["Barkod;Adet", ...items.map(i => `${csvCell(i.barcode)};${i.quantity}`)].join(
+  ["Barkod;Adet", ...items.map(i => `${csvCell(i.barcode)};${csvQty(i.quantity)}`)].join(
     "\r\n"
   )
 
@@ -79,8 +81,8 @@ export const compareToCSV = (rows: CompareRow[]) =>
     ...rows.map(r =>
       [
         csvCell(r.barcode),
-        r.stockQty,
-        r.countQty,
+        csvQty(r.stockQty),
+        csvQty(r.countQty),
         diffText(r),
         STATUS_TEXT[r.status],
       ].join(";")
@@ -125,7 +127,7 @@ const makeCompareXLSXBlob = async (rows: CompareRow[]): Promise<Blob> => {
       r.barcode,
       r.stockQty,
       r.countQty,
-      r.countQty - r.stockQty,
+      round2(r.countQty - r.stockQty),
       STATUS_TEXT[r.status],
     ]),
   ])
@@ -163,11 +165,11 @@ const isAbort = (err: unknown) =>
   err instanceof DOMException && err.name === "AbortError"
 
 const buildCountText = (items: CountRow[], sessionName: string) => {
-  const totalQty = items.reduce((s, i) => s + i.quantity, 0)
-  const lines = items.map(i => `${i.barcode}: ${i.quantity}`)
+  const totalQty = round2(items.reduce((s, i) => s + i.quantity, 0))
+  const lines = items.map(i => `${i.barcode}: ${fmtQty(i.quantity)}`)
   return (
     `📦 Stok Sayım — ${sessionName} (${dateTimeStr()})\n` +
-    `Toplam ürün: ${totalQty} · Farklı barkod: ${items.length}\n\n` +
+    `Toplam ürün: ${fmtQty(totalQty)} · Farklı barkod: ${items.length}\n\n` +
     lines.join("\n")
   )
 }
@@ -175,7 +177,7 @@ const buildCountText = (items: CountRow[], sessionName: string) => {
 const buildCompareText = (rows: CompareRow[], sessionName: string) => {
   const lines = rows.map(
     r =>
-      `${r.barcode}: stok ${r.stockQty}, sayım ${r.countQty} (${diffText(r)}) — ${STATUS_TEXT[r.status]}`
+      `${r.barcode}: stok ${fmtQty(r.stockQty)}, sayım ${fmtQty(r.countQty)} (${diffText(r)}) — ${STATUS_TEXT[r.status]}`
   )
   return (
     `📊 Stok Karşılaştırma — ${sessionName} (${dateTimeStr()})\n\n` +
