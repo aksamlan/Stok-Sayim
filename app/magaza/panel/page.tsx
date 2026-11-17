@@ -31,6 +31,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { Toaster, toast } from "sonner"
 import { PoweredByStokzen, StokzenWordmark } from "@/components/stokzen"
 import { ActivityLog } from "@/components/activity-log"
+import { fmtQty, round2 } from "@/lib/qty"
 import { RenameStoreDialog } from "@/components/rename-store-dialog"
 import { CatalogUpload } from "@/components/catalog-upload"
 import { CounterDetailDialog } from "@/components/counter-detail-dialog"
@@ -748,7 +749,7 @@ export default function PanelPage() {
                       </TableHeader>
                       <TableBody>
                         {dash.byCategory.map((c) => {
-                          const diff = c.counted - c.expected
+                          const diff = round2(c.counted - c.expected)
                           return (
                             <TableRow key={c.category ?? "__none"}>
                               <TableCell className="py-1.5 font-medium">
@@ -769,7 +770,7 @@ export default function PanelPage() {
                                     : "text-amber-700 dark:text-amber-400"
                                 }`}
                               >
-                                {diff > 0 ? `+${diff}` : diff}
+                                {diff > 0 ? `+${fmtQty(diff)}` : fmtQty(diff)}
                               </TableCell>
                             </TableRow>
                           )
@@ -879,10 +880,10 @@ export default function PanelPage() {
                                 </TableCell>
                               )}
                               <TableCell className="py-1.5 text-right tabular-nums">
-                                {r.expected ?? "—"}
+                                {r.expected == null ? "—" : fmtQty(r.expected)}
                               </TableCell>
                               <TableCell className="py-1.5 text-right font-bold tabular-nums">
-                                {r.counted}
+                                {fmtQty(r.counted)}
                               </TableCell>
                               <TableCell className="py-1.5">
                                 <Badge variant="outline" className={badge.cls}>

@@ -115,3 +115,28 @@ test("sayımcı detayı: yalnız kendi saydığı ürünler, net adet, en son ok
   const other = createStore(db, "B", "say123", "admin123")
   expect(counterDetail(db, other.storeId, sessionId, "Ayşe").rows).toHaveLength(0)
 })
+
+test("kilolu ürün: 2 ondalıklı adet kabul edilir, toplamlar kayma yapmaz, geçersizler reddedilir", () => {
+  const { db, storeId, sessionId } = setup()
+  // 0.1 + 0.2 = 0.30000000000000004 olmamalı
+  recordEvents(db, storeId, "Ali", [ev(sessionId, "1", 0.1), ev(sessionId, "1", 0.2), ev(sessionId, "2", 2.5)])
+  recordEvents(db, storeId, "Ali", [ev(sessionId, "2", 1.25)])
+  const d = dashboard(db, storeId, sessionId, all)
+  expect(d.rows.find((r) => r.barcode === "1")?.counted).toBe(0.3)
+  expect(d.rows.find((r) => r.barcode === "2")?.counted).toBe(3.75)
+  expect(d.totals.totalQty).toBe(4.05)
+  expect(d.byCounter[0]).toMatchObject({ qty: 4.05, distinct: 2 })
+  // azaltma: 3.75 - 1.25 = 2.5 ; tamamını silince çeşit düşer
+  recordEvents(db, storeId, "Ali", [ev(sessionId, "2", -1.25)])
+  expect(counterDetail(db, storeId, sessionId, "Ali").rows.find((r) => r.barcode === "2")?.qty).toBe(2.5)
+  recordEvents(db, storeId, "Ali", [ev(sessionId, "2", -2.5)])
+  expect(counterDetail(db, storeId, sessionId, "Ali").rows.map((r) => r.barcode)).toEqual(["1"])
+  // geçersiz: 3 ondalık, sıfır, NaN, devasa
+  for (const bad of [1.234, 0, NaN, Infinity, 1e9]) {
+    expect(() => recordEvents(db, storeId, "Ali", [ev(sessionId, "1", bad)])).toThrow()
+  }
+  // beklenen ile eşitlik ondalıkta da çalışır
+  replaceCatalog(db, storeId, [{ barcode: "9", name: "Elma", category: "M", expected: 2.5 }])
+  recordEvents(db, storeId, "Ali", [ev(sessionId, "9", 1.5), ev(sessionId, "9", 1)])
+  expect(dashboard(db, storeId, sessionId, all).rows.find((r) => r.barcode === "9")?.status).toBe("match")
+})

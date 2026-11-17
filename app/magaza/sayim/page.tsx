@@ -69,6 +69,7 @@ import {
   startSync,
 } from "@/lib/store-client/offline"
 import { clearAuth, loadAuth, saveAuth } from "@/lib/store-client/session"
+import { csvQty, fmtQty, parseQtyInput, round2 } from "@/lib/qty"
 import { fmtShort } from "@/lib/time"
 import type { CatalogEntry, StoreAuth, SyncState } from "@/lib/store-client/types"
 import { useDarkMode } from "@/lib/store-client/use-dark-mode"
@@ -270,7 +271,7 @@ export default function SayimPage() {
 
       const entry = catalogRef.current?.get(barcode) ?? null
       const existing = itemsRef.current.find((i) => i.barcode === barcode)
-      const total = (existing?.qty ?? 0) + qty
+      const total = round2((existing?.qty ?? 0) + qty)
 
       await enqueueScan(a.storeId, {
         id: crypto.randomUUID(),
@@ -322,16 +323,28 @@ export default function SayimPage() {
     }
   }
 
-  // Hesap makinesi tuş takımı (normal sayımla aynı davranış)
+  // Hesap makinesi tuş takımı: virgülden sonra en fazla 2 hane (kilolu ürün: 2,5)
   const pressQtyDigit = (d: string) => {
     setQtyInput((prev) => {
       if (qtyPristineRef.current) {
         qtyPristineRef.current = false
         return d
       }
-      if (prev === "0" || prev === "") return d
-      if (prev.length >= 5) return prev
+      if (prev === "0") return d
+      const comma = prev.indexOf(",")
+      if (comma >= 0) return prev.length - comma - 1 >= 2 ? prev : prev + d
+      if (prev.length >= 6) return prev
       return prev + d
+    })
+  }
+  const pressQtyComma = () => {
+    setQtyInput((prev) => {
+      if (qtyPristineRef.current) {
+        qtyPristineRef.current = false
+        return "0,"
+      }
+      if (prev.includes(",")) return prev
+      return (prev || "0") + ","
     })
   }
   const qtyBackspace = () => {
@@ -347,14 +360,14 @@ export default function SayimPage() {
     focusInput()
   }
   const confirmQtyInput = () => {
-    const n = parseInt(qtyInput, 10)
-    if (Number.isFinite(n) && n > 0) confirmQty(n)
+    const n = parseQtyInput(qtyInput)
+    if (Number.isFinite(n) && n >= 0.01) confirmQty(n)
   }
 
   const confirmQty = (qty: number) => {
     const code = qtyDialogBarcode
     setQtyDialogBarcode(null)
-    if (code && qty > 0) void addBarcode(code, qty)
+    if (code && qty >= 0.01) void addBarcode(code, qty)
     focusInput()
   }
 
@@ -387,7 +400,7 @@ export default function SayimPage() {
     const s = sessionRef.current
     if (!a || !s || adjustBusyRef.current) return
     const existing = itemsRef.current.find((i) => i.barcode === barcode)
-    if (!existing || existing.qty + delta < 1) return
+    if (!existing || round2(existing.qty + delta) < 0.01) return
     adjustBusyRef.current = true
     try {
       await enqueueScan(a.storeId, {
@@ -432,7 +445,7 @@ export default function SayimPage() {
 
   if (!auth) return null
 
-  const totalQty = items.reduce((sum, i) => sum + i.qty, 0)
+  const totalQty = round2(items.reduce((sum, i) => sum + i.qty, 0))
   const filtered = search.trim()
     ? items.filter((i) => {
         const entry = catalogRef.current?.get(i.barcode)
@@ -533,7 +546,7 @@ export default function SayimPage() {
                     dead
                       .map(
                         (d) =>
-                          `${d.barcode};${d.qty};${fmtShort(d.createdAt)}`
+                          `${d.barcode};${csvQty(d.qty)};${fmtShort(d.createdAt)}`
                       )
                       .join("\r\n")
                   const url = URL.createObjectURL(
@@ -618,9 +631,9 @@ export default function SayimPage() {
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-lg font-bold tabular-nums leading-tight">
-                    {lastScan.total}
+                    {fmtQty(lastScan.total)}
                   </p>
-                  <p className="text-[10px] text-muted-foreground">+{lastScan.qty} adet</p>
+                  <p className="text-[10px] text-muted-foreground">{lastScan.qty > 0 ? "+" : ""}{fmtQty(lastScan.qty)} adet</p>
                 </div>
               </div>
             )}
@@ -788,7 +801,7 @@ export default function SayimPage() {
                                     variant="outline"
                                     size="icon"
                                     className="h-8 w-8"
-                                    disabled={item.qty <= 1}
+                                    disabled={item.qty - 1 < 0.01}
                                     onClick={() => void adjustItem(item.barcode, -1)}
                                     title="Bir azalt"
                                     aria-label="Bir azalt"
@@ -796,7 +809,7 @@ export default function SayimPage() {
                                     <Minus className="h-4 w-4" />
                                   </Button>
                                   <span className="min-w-8 text-center font-bold tabular-nums">
-                                    {item.qty}
+                                    {fmtQty(item.qty)}
                                   </span>
                                   <Button
                                     variant="outline"
@@ -865,6 +878,9 @@ export default function SayimPage() {
             if (e.key >= "0" && e.key <= "9") {
               e.preventDefault()
               pressQtyDigit(e.key)
+            } else if (e.key === "," || e.key === ".") {
+              e.preventDefault()
+              pressQtyComma()
             } else if (e.key === "Backspace") {
               e.preventDefault()
               qtyBackspace()
@@ -897,7 +913,7 @@ export default function SayimPage() {
                   </p>
                   {items.find((i) => i.barcode === qtyDialogBarcode) && (
                     <Badge variant="secondary">
-                      Sayımda: {items.find((i) => i.barcode === qtyDialogBarcode)!.qty} adet
+                      Sayımda: {fmtQty(items.find((i) => i.barcode === qtyDialogBarcode)!.qty)} adet
                     </Badge>
                   )}
                 </div>
@@ -933,6 +949,8 @@ export default function SayimPage() {
                     {d}
                   </Button>
                 ))}
+              </div>
+              <div className="grid grid-cols-4 gap-2">
                 <Button
                   type="button"
                   variant="outline"
@@ -953,6 +971,16 @@ export default function SayimPage() {
                 <Button
                   type="button"
                   variant="outline"
+                  className="h-14 text-2xl font-mono"
+                  onClick={pressQtyComma}
+                  title="Virgül (kilolu ürün: 2,5)"
+                  aria-label="Virgül"
+                >
+                  ,
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
                   className="h-14"
                   onClick={qtyBackspace}
                   title="Sil"
@@ -968,7 +996,7 @@ export default function SayimPage() {
                   type="button"
                   className="h-12 text-lg"
                   onClick={confirmQtyInput}
-                  disabled={!qtyInput || parseInt(qtyInput, 10) < 1}
+                  disabled={!(parseQtyInput(qtyInput) >= 0.01)}
                 >
                   <Plus className="h-5 w-5 mr-1.5" />
                   Ekle
@@ -998,7 +1026,7 @@ export default function SayimPage() {
                     </p>
                     <p className="font-mono text-xs">{deleteTarget.barcode}</p>
                     <p>
-                      Saydığın <b>{deleteTarget.qty} adet</b> silinecek. Bu işlem geri alınamaz.
+                      Saydığın <b>{fmtQty(deleteTarget.qty)} adet</b> silinecek. Bu işlem geri alınamaz.
                     </p>
                   </>
                 )}

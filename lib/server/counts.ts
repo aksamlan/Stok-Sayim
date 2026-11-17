@@ -38,6 +38,12 @@ export type DashboardResult = {
   serverNow: number
 }
 
+// Adet: sıfırdan farklı, en fazla 2 ondalık (kilolu ürünler: 2,5 kg gibi), makul büyüklükte.
+export function isValidQty(q: unknown): q is number {
+  if (typeof q !== "number" || !Number.isFinite(q) || q === 0 || Math.abs(q) > 1_000_000) return false
+  return Math.abs(q * 100 - Math.round(q * 100)) < 1e-6
+}
+
 function assertActiveSession(db: DatabaseSync, storeId: string, sessionId: string) {
   const row = db
     .prepare("SELECT status FROM sessions WHERE id = ? AND store_id = ?")
@@ -64,7 +70,7 @@ export function recordEvents(
       e.sessionId !== sessionId ||
       typeof e.barcode !== "string" ||
       !e.barcode ||
-      !Number.isInteger(e.qty) ||
+      !isValidQty(e.qty) ||
       typeof e.createdAt !== "number" ||
       !Number.isFinite(e.createdAt)
     ) {
@@ -108,9 +114,9 @@ export function myCounts(
 ): { barcode: string; qty: number }[] {
   return db
     .prepare(
-      `SELECT barcode, SUM(qty) AS qty FROM scan_events
+      `SELECT barcode, ROUND(SUM(qty), 2) AS qty FROM scan_events
        WHERE store_id = ? AND session_id = ? AND counter = ?
-       GROUP BY barcode HAVING SUM(qty) > 0
+       GROUP BY barcode HAVING ROUND(SUM(qty), 2) > 0
        ORDER BY MAX(received_at) DESC`
     )
     .all(storeId, sessionId, counter) as { barcode: string; qty: number }[]
@@ -122,7 +128,7 @@ export function myCounts(
 // arasında temp tablo çakışması olmaz.
 const ROWS_CTE = `
 WITH agg AS (
-  SELECT barcode, SUM(qty) AS counted, MAX(received_at) AS last_at
+  SELECT barcode, ROUND(SUM(qty), 2) AS counted, MAX(received_at) AS last_at
   FROM scan_events
   WHERE store_id = ? AND session_id = ?
   GROUP BY barcode
@@ -206,7 +212,7 @@ export function dashboard(
 
     const totalsRow = db
       .prepare(
-        `SELECT COALESCE(SUM(counted), 0) AS totalQty,
+        `SELECT ROUND(COALESCE(SUM(counted), 0), 2) AS totalQty,
            COALESCE(SUM(counted <> 0 AND status <> 'only-count'), 0) AS distinctCounted,
            COALESCE(SUM(status = 'only-count'), 0) AS unknownCount,
            COALESCE(SUM(status <> 'only-count'), 0) AS catalogCount
@@ -230,10 +236,10 @@ export function dashboard(
     // telefon saati yanlış olsa bile "1 saat önce" gibi hatalı görünmez.
     const byCounter = db
       .prepare(
-        `SELECT counter, COALESCE(SUM(q), 0) AS qty, COALESCE(SUM(q > 0), 0) AS distinct_n,
+        `SELECT counter, ROUND(COALESCE(SUM(q), 0), 2) AS qty, COALESCE(SUM(q > 0), 0) AS distinct_n,
                 MAX(last_at) AS lastAt
          FROM (
-           SELECT counter, barcode, SUM(qty) AS q, MAX(received_at) AS last_at
+           SELECT counter, barcode, ROUND(SUM(qty), 2) AS q, MAX(received_at) AS last_at
            FROM scan_events WHERE store_id = ? AND session_id = ?
            GROUP BY counter, barcode
          ) GROUP BY counter ORDER BY qty DESC`
@@ -247,8 +253,8 @@ export function dashboard(
 
     const byCategory = db
       .prepare(
-        `SELECT category, COALESCE(SUM(counted), 0) AS counted,
-           COALESCE(SUM(expected), 0) AS expected,
+        `SELECT category, ROUND(COALESCE(SUM(counted), 0), 2) AS counted,
+           ROUND(COALESCE(SUM(expected), 0), 2) AS expected,
            SUM(counted <> 0) AS distinct_n
          FROM temp.dash_rows GROUP BY category
          ORDER BY category IS NULL, category`
@@ -333,9 +339,9 @@ export function counterDetail(
   const filterParams = search ? [`%${search}%`, `%${search.toLocaleLowerCase("tr")}%`] : []
   const base = `
     FROM (
-      SELECT barcode, SUM(qty) AS qty, MAX(received_at) AS last_at
+      SELECT barcode, ROUND(SUM(qty), 2) AS qty, MAX(received_at) AS last_at
       FROM scan_events WHERE store_id = ? AND session_id = ? AND counter = ?
-      GROUP BY barcode HAVING SUM(qty) > 0
+      GROUP BY barcode HAVING ROUND(SUM(qty), 2) > 0
     ) g
     LEFT JOIN products p ON p.store_id = ? AND p.barcode = g.barcode
     ${filter}`
@@ -348,7 +354,7 @@ export function counterDetail(
     )
     .all(...params, limit) as CounterDetailRow[]
   const agg = db
-    .prepare(`SELECT COUNT(*) AS total, COALESCE(SUM(g.qty), 0) AS totalQty ${base}`)
+    .prepare(`SELECT COUNT(*) AS total, ROUND(COALESCE(SUM(g.qty), 0), 2) AS totalQty ${base}`)
     .get(...params) as { total: number; totalQty: number }
   return { rows, total: agg.total, totalQty: agg.totalQty }
 }

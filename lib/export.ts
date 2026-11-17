@@ -1,5 +1,6 @@
 // Dışa aktarma ve paylaşma yardımcıları: XLSX, CSV ve Web Share.
 
+import { csvQty, round2 } from "./qty"
 import { fmtDateTime, todayISO } from "./time"
 
 export interface CountRow {
@@ -250,10 +251,10 @@ export interface StoreReportRow {
 }
 
 const storeDiffText = (r: StoreReportRow) => {
-  if (r.status === "only-count") return `+${r.counted}`
+  if (r.status === "only-count") return `+${csvQty(r.counted)}`
   if (r.expected == null) return ""
-  const d = r.counted - r.expected
-  return d > 0 ? `+${d}` : String(d)
+  const d = round2(r.counted - r.expected)
+  return d > 0 ? `+${csvQty(d)}` : csvQty(d)
 }
 
 export const storeReportToCSV = (rows: StoreReportRow[]) =>
@@ -264,8 +265,8 @@ export const storeReportToCSV = (rows: StoreReportRow[]) =>
         csvCell(r.barcode),
         csvCell(r.name ?? ""),
         csvCell(r.category ?? ""),
-        r.expected ?? "",
-        r.counted,
+        r.expected == null ? "" : csvQty(r.expected),
+        csvQty(r.counted),
         storeDiffText(r),
         STATUS_TEXT[r.status],
       ].join(";")

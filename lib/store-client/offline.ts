@@ -1,3 +1,4 @@
+import { round2 } from "../qty"
 import {
   ApiHttpError,
   AuthExpiredError,
@@ -95,7 +96,7 @@ export async function enqueueScan(
   await idbPut(db, "queue", event)
   const key = `${event.sessionId}|${event.barcode}`
   const existing = await idbGet<MineRow>(db, "mine", key)
-  const qty = (existing?.qty ?? 0) + event.qty
+  const qty = round2((existing?.qty ?? 0) + event.qty)
   if (qty <= 0) {
     await idbDelete(db, "mine", [key])
   } else {

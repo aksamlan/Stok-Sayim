@@ -64,7 +64,7 @@ export function overview(db: DatabaseSync): {
         (SELECT COUNT(*) FROM sessions x WHERE x.store_id = s.id) AS sessionCount,
         (SELECT COUNT(DISTINCT counter) FROM scan_events e WHERE e.store_id = s.id) AS counterCount,
         (SELECT COUNT(*) FROM scan_events e WHERE e.store_id = s.id) AS eventCount,
-        (SELECT COALESCE(SUM(qty), 0) FROM scan_events e WHERE e.store_id = s.id) AS totalQty,
+        (SELECT ROUND(COALESCE(SUM(qty), 0), 2) FROM scan_events e WHERE e.store_id = s.id) AS totalQty,
         (SELECT MAX(received_at) FROM scan_events e WHERE e.store_id = s.id) AS lastActivity
        FROM stores s ORDER BY s.created_at DESC`
     )

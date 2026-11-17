@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { apiActivity, type ActivityEntry } from "@/lib/store-client/api"
+import { fmtQty } from "@/lib/qty"
 import { fmtShort } from "@/lib/time"
 
 function describe(e: ActivityEntry): { text: string; tone: "add" | "remove" | "info" } {
@@ -13,8 +14,8 @@ function describe(e: ActivityEntry): { text: string; tone: "add" | "remove" | "i
       const q = e.qty ?? 0
       const who = e.name ?? "Listede yok"
       return q >= 0
-        ? { text: `+${q} · ${who} (${e.barcode})`, tone: "add" }
-        : { text: `−${Math.abs(q)} çıkardı/sildi · ${who} (${e.barcode})`, tone: "remove" }
+        ? { text: `+${fmtQty(q)} · ${who} (${e.barcode})`, tone: "add" }
+        : { text: `−${fmtQty(Math.abs(q))} çıkardı/sildi · ${who} (${e.barcode})`, tone: "remove" }
     }
     case "login":
       return { text: "giriş yaptı", tone: "info" }
