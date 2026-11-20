@@ -64,6 +64,7 @@ import {
   getMine,
   lastKnownSession,
   pruneMineExcept,
+  clearMineForSession,
   rememberSession,
   seedMine,
   startSync,
@@ -111,6 +112,9 @@ export default function SayimPage() {
   const [deleteTarget, setDeleteTarget] = useState<{ barcode: string; qty: number } | null>(null)
   const adjustBusyRef = useRef(false)
   const [search, setSearch] = useState("")
+  // Telefon yavaşlamasın: binlerce satırı birden çizmek yerine son N ürünü göster
+  const [visibleCount, setVisibleCount] = useState(40)
+  const [clearOpen, setClearOpen] = useState(false)
 
   const catalogRef = useRef<Map<string, CatalogEntry> | null>(null)
   const [catalogReady, setCatalogReady] = useState(false)
@@ -457,6 +461,29 @@ export default function SayimPage() {
       })
     : items
 
+  const searching = search.trim().length > 0
+  const shown = filtered.slice(0, searching ? 100 : visibleCount)
+
+  const clearLocalList = async () => {
+    const a = authRef.current
+    const sess = sessionRef.current
+    if (!a || !sess) return
+    const r = await clearMineForSession(a.storeId, sess.id)
+    setClearOpen(false)
+    if (!r.ok) {
+      toast.warning(
+        r.reason === "pending"
+          ? "Önce bekleyen okutmaların gönderilmesini bekle (üstte \"Senkron\" yazınca temizle)"
+          : "Gönderilemeyen okutmaların var, önce onları kurtar"
+      )
+      return
+    }
+    setItems([])
+    setLastScan(null)
+    setVisibleCount(40)
+    toast.success("Telefondaki liste temizlendi — sayımların sunucuda güvende")
+  }
+
   const syncBadge = sync.authExpired ? (
     <button onClick={logout} className="inline-flex">
       <Badge variant="outline" className="bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30">
@@ -743,7 +770,10 @@ export default function SayimPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => {
+                  setSearch(e.target.value)
+                  setVisibleCount(40)
+                }}
                 placeholder="Listende ara..."
                 className="pl-9 h-10 bg-card"
               />
@@ -773,7 +803,7 @@ export default function SayimPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filtered.map((item) => {
+                        {shown.map((item) => {
                           const entry = catalogRef.current?.get(item.barcode)
                           return (
                             <TableRow key={item.barcode}>
@@ -840,10 +870,31 @@ export default function SayimPage() {
                         })}
                       </TableBody>
                     </Table>
+                    {filtered.length > shown.length && (
+                      <div className="border-t p-2 text-center">
+                        <p className="mb-1 text-[11px] text-muted-foreground">
+                          Son {shown.length} ürün gösteriliyor (toplam {filtered.length}). Eskiyi bulmak için üstteki aramayı kullan.
+                        </p>
+                        <Button variant="ghost" size="sm" onClick={() => setVisibleCount((c) => c + 40)}>
+                          Daha fazla göster
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 )}
               </CardContent>
             </Card>
+            {items.length > 0 && (
+              <div className="mt-2 text-center">
+                <button
+                  type="button"
+                  onClick={() => setClearOpen(true)}
+                  className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                >
+                  Telefondaki listeyi temizle (telefon yavaşladıysa)
+                </button>
+              </div>
+            )}
           </>
         )}
 
@@ -1006,6 +1057,45 @@ export default function SayimPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Telefondaki listeyi temizle */}
+      <AlertDialog open={clearOpen} onOpenChange={setClearOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Telefondaki liste temizlensin mi?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>
+                  Saydıkların <b>sunucuda güvende</b>, yönetici hepsini görür. Silinen yalnızca bu
+                  telefondaki liste; telefon hafifler ve hızlanır.
+                </p>
+                <p>
+                  Temizledikten sonra eski ürünlerin adedini bu telefondan <b>artırıp azaltamaz ya da
+                  silemezsin</b> (yönetici düzeltir). Sayıma devam edebilirsin.
+                </p>
+                {sync.pending > 0 && (
+                  <p className="font-medium text-amber-700 dark:text-amber-400">
+                    {sync.pending} okutma henüz gönderilmedi, gönderilince temizleyebilirsin.
+                  </p>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Hayır, vazgeç</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              disabled={sync.pending > 0}
+              onClick={(e) => {
+                e.preventDefault()
+                void clearLocalList()
+              }}
+            >
+              Evet, temizle
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Silme onayı */}
       <AlertDialog

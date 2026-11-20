@@ -155,6 +155,22 @@ export async function pruneMineExcept(
   if (stale.length > 0) await idbDelete(db, "mine", stale)
 }
 
+// Telefondaki "kendi listem"i boşaltır (sunucudaki sayıma DOKUNMAZ). Güvenlik: bekleyen
+// (gönderilmemiş) okutma ya da emanet deposunda kurtarılacak okutma varsa temizlemez;
+// çünkü o kayıtlar yalnız bu telefonda durur.
+export async function clearMineForSession(
+  storeId: string,
+  sessionId: string
+): Promise<{ ok: true; removed: number } | { ok: false; reason: "pending" | "dead" }> {
+  const db = await openIdb(storeId)
+  if ((await idbGetAll<QueuedEvent>(db, "queue")).length > 0) return { ok: false, reason: "pending" }
+  if ((await idbGetAll<DeadEvent>(db, "dead")).length > 0) return { ok: false, reason: "dead" }
+  const rows = await idbGetAll<MineRow>(db, "mine")
+  const keys = rows.filter((r) => r.sessionId === sessionId).map((r) => r.key)
+  if (keys.length > 0) await idbDelete(db, "mine", keys)
+  return { ok: true, removed: keys.length }
+}
+
 export async function pendingCount(storeId: string): Promise<number> {
   const db = await openIdb(storeId)
   const rows = await idbGetAll<QueuedEvent>(db, "queue")
