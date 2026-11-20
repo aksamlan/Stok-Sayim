@@ -140,3 +140,36 @@ test("kilolu ürün: 2 ondalıklı adet kabul edilir, toplamlar kayma yapmaz, ge
   recordEvents(db, storeId, "Ali", [ev(sessionId, "9", 1.5), ev(sessionId, "9", 1)])
   expect(dashboard(db, storeId, sessionId, all).rows.find((r) => r.barcode === "9")?.status).toBe("match")
 })
+
+test("yönetici sayımcının ürününü kaldırır: net adet düşer, iz kalır, kapalı sayımda/başkasında olmaz", async () => {
+  const { removeCounterItem } = await import("../../lib/server/counts")
+  const { closeSession } = await import("../../lib/server/stores")
+  const { db, storeId, sessionId } = setup()
+  recordEvents(db, storeId, "Murat", [ev(sessionId, "1", 2), ev(sessionId, "2", 1.5)])
+  recordEvents(db, storeId, "Ali", [ev(sessionId, "1", 4)])
+  expect(removeCounterItem(db, storeId, sessionId, "Murat", "1")).toEqual({ removed: 2 })
+  expect(counterDetail(db, storeId, sessionId, "Murat").rows.map((r) => r.barcode)).toEqual(["2"])
+  expect(counterDetail(db, storeId, sessionId, "Ali").rows[0]).toMatchObject({ barcode: "1", qty: 4 }) // Ali'ye dokunulmadı
+  expect(dashboard(db, storeId, sessionId, all).rows.find((r) => r.barcode === "1")?.counted).toBe(4)
+  expect(() => removeCounterItem(db, storeId, sessionId, "Murat", "1")).toThrow() // zaten yok
+  expect(removeCounterItem(db, storeId, sessionId, "Murat", "2")).toEqual({ removed: 1.5 }) // ondalık
+  closeSession(db, storeId, sessionId)
+  expect(() => removeCounterItem(db, storeId, sessionId, "Ali", "1")).toThrow() // kapalı sayım değişmez
+  // başka mağaza yapamaz
+  const other = createStore(db, "B", "say123", "admin123")
+  expect(() => removeCounterItem(db, other.storeId, sessionId, "Ali", "1")).toThrow()
+})
+
+test("yönetici adet eksiltir: yalnız mevcuttan küçüğe, ondalık olur, fazlası/geçersizi reddedilir", async () => {
+  const { decreaseCounterItem } = await import("../../lib/server/counts")
+  const { db, storeId, sessionId } = setup()
+  recordEvents(db, storeId, "Murat", [ev(sessionId, "1", 5), ev(sessionId, "2", 2.5)])
+  expect(decreaseCounterItem(db, storeId, sessionId, "Murat", "1", 3)).toEqual({ from: 5, to: 3 })
+  expect(counterDetail(db, storeId, sessionId, "Murat").rows.find((r) => r.barcode === "1")?.qty).toBe(3)
+  expect(decreaseCounterItem(db, storeId, sessionId, "Murat", "2", 1.75)).toEqual({ from: 2.5, to: 1.75 })
+  expect(dashboard(db, storeId, sessionId, all).totals.totalQty).toBe(4.75)
+  for (const bad of [3, 4, 0, -1, 0.001, NaN]) {
+    expect(() => decreaseCounterItem(db, storeId, sessionId, "Murat", "1", bad)).toThrow()
+  }
+  expect(() => decreaseCounterItem(db, storeId, sessionId, "Murat", "3", 1)).toThrow() // sayımda yok
+})

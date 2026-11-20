@@ -244,3 +244,18 @@ export function apiCounterDetail(
 export function apiRenameStore(token: string, name: string): Promise<{ name: string }> {
   return request("/api/store/rename", { method: "POST", token, body: { name } })
 }
+
+export function apiRemoveCounterItem(
+  token: string,
+  opts: { sessionId: string; counter: string; barcode: string }
+): Promise<{ removed: number }> {
+  const q = new URLSearchParams(opts)
+  return request(`/api/counter-detail?${q.toString()}`, { method: "DELETE", token })
+}
+
+export function apiDecreaseCounterItem(
+  token: string,
+  body: { sessionId: string; counter: string; barcode: string; qty: number }
+): Promise<{ from: number; to: number }> {
+  return request("/api/counter-detail", { method: "PATCH", token, body })
+}

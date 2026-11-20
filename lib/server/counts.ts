@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite"
+import { randomUUID } from "node:crypto"
 import { ApiError } from "./auth"
 
 export type ScanEvent = {
@@ -357,4 +358,62 @@ export function counterDetail(
     .prepare(`SELECT COUNT(*) AS total, ROUND(COALESCE(SUM(g.qty), 0), 2) AS totalQty ${base}`)
     .get(...params) as { total: number; totalQty: number }
   return { rows, total: agg.total, totalQty: agg.totalQty }
+}
+
+// Yönetici: bir sayımcının bir üründeki sayımını tamamen kaldırır. Silme, uygulamadaki
+// çöp kutusuyla aynı yöntemdir (net adet kadar eksi hareket): kayıt izi kalır, geri
+// alınabilir/denetlenebilir. Yalnız AKTİF sayımda (kapalı sayım raporları değişmez).
+export function removeCounterItem(
+  db: DatabaseSync,
+  storeId: string,
+  sessionId: string,
+  counter: string,
+  barcode: string
+): { removed: number } {
+  assertActiveSession(db, storeId, sessionId)
+  const row = db
+    .prepare(
+      `SELECT ROUND(COALESCE(SUM(qty), 0), 2) AS net FROM scan_events
+       WHERE store_id = ? AND session_id = ? AND counter = ? AND barcode = ?`
+    )
+    .get(storeId, sessionId, counter, barcode) as { net: number }
+  if (!(row.net > 0)) throw new ApiError(404, "Bu ürün bu sayımcıda zaten yok")
+  recordEvents(db, storeId, counter, [
+    {
+      id: `admin-remove-${randomUUID()}`,
+      sessionId,
+      barcode,
+      qty: -row.net,
+      createdAt: Date.now(),
+    },
+  ])
+  return { removed: row.net }
+}
+
+// Yönetici: bir sayımcının bir üründeki adedini EKSİLTİR (ör. 5 → 3). Fazla yazmak
+// için kullanılamaz (yönetici sayımı şişiremez); yeni adet 0,01 ile mevcut adet
+// arasında olmalı. Eksi hareket olarak kaydedilir, iz kalır. Yalnız aktif sayımda.
+export function decreaseCounterItem(
+  db: DatabaseSync,
+  storeId: string,
+  sessionId: string,
+  counter: string,
+  barcode: string,
+  newQty: number
+): { from: number; to: number } {
+  assertActiveSession(db, storeId, sessionId)
+  if (!isValidQty(newQty) || newQty < 0.01) throw new ApiError(400, "Geçerli bir adet gir (en fazla 2 ondalık)")
+  const row = db
+    .prepare(
+      `SELECT ROUND(COALESCE(SUM(qty), 0), 2) AS net FROM scan_events
+       WHERE store_id = ? AND session_id = ? AND counter = ? AND barcode = ?`
+    )
+    .get(storeId, sessionId, counter, barcode) as { net: number }
+  if (!(row.net > 0)) throw new ApiError(404, "Bu ürün bu sayımcıda yok")
+  if (newQty >= row.net) throw new ApiError(400, `Yeni adet mevcut adetten (${row.net}) küçük olmalı`)
+  const delta = Math.round((newQty - row.net) * 100) / 100
+  recordEvents(db, storeId, counter, [
+    { id: `admin-adjust-${randomUUID()}`, sessionId, barcode, qty: delta, createdAt: Date.now() },
+  ])
+  return { from: row.net, to: newQty }
 }
