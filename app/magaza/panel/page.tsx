@@ -140,20 +140,6 @@ export default function PanelPage() {
   const [newSessionName, setNewSessionName] = useState("")
   const [closeConfirm, setCloseConfirm] = useState(false)
   // Sunucu saati − cihaz saati: "x dk önce" cihaz saatinden bağımsız doğru olsun
-  // Tutar hangi fiyata göre hesaplansın: satış ya da alış (maliyet); tercih cihazda saklanır
-  const [priceType, setPriceType] = useState<"sale" | "cost">("sale")
-  useEffect(() => {
-    try {
-      const v = localStorage.getItem("magazaFiyatTuru")
-      if (v === "sale" || v === "cost") setPriceType(v)
-    } catch {}
-  }, [])
-  const changePriceType = (t: "sale" | "cost") => {
-    setPriceType(t)
-    try {
-      localStorage.setItem("magazaFiyatTuru", t)
-    } catch {}
-  }
   const [skew, setSkew] = useState(0)
   const [renameOpen, setRenameOpen] = useState(false)
   const [detailCounter, setDetailCounter] = useState<string | null>(null)
@@ -664,41 +650,27 @@ export default function PanelPage() {
               </div>
             </div>
 
-            {/* Tutarlar (fiyat tanımlıysa) */}
+            {/* Tutarlar: satış ve alış yan yana */}
             {(() => {
               const v = dash.totals.value
-              const isSale = priceType === "sale"
-              const counted = isSale ? v.saleCounted : v.costCounted
-              const expected = isSale ? v.saleExpected : v.costExpected
-              const priced = isSale ? v.salePriced : v.costPriced
-              const noPrice = isSale ? v.countedNoSale : v.countedNoCost
-              const diff = round2(counted - expected)
               const anyPrice = v.salePriced > 0 || v.costPriced > 0
+              const sale = { counted: v.saleCounted, expected: v.saleExpected, noPrice: v.countedNoSale, priced: v.salePriced }
+              const cost = { counted: v.costCounted, expected: v.costExpected, noPrice: v.countedNoCost, priced: v.costPriced }
+              const sDiff = round2(sale.counted - sale.expected)
+              const cDiff = round2(cost.counted - cost.expected)
+              const diffCls = (d: number) =>
+                d === 0 ? "" : d > 0 ? "text-green-700 dark:text-green-400" : "text-amber-700 dark:text-amber-400"
+              const rows: { label: string; s: number; c: number; sCls?: string; cCls?: string; signed?: boolean }[] = [
+                { label: "Sayılan tutar", s: sale.counted, c: cost.counted },
+                { label: "Beklenen tutar (stok × fiyat)", s: sale.expected, c: cost.expected },
+                { label: "Fark (sayılan − beklenen)", s: sDiff, c: cDiff, sCls: diffCls(sDiff), cCls: diffCls(cDiff), signed: true },
+              ]
               return (
                 <Card className="mb-3 py-0 gap-0 overflow-hidden">
                   <CardContent className="p-0">
                     <div className="flex items-center gap-2 border-b px-3 py-2">
                       <Coins className="h-4 w-4 text-primary" />
                       <span className="text-sm font-medium">Tutar</span>
-                      <div className="ml-auto grid grid-cols-2 gap-0.5 rounded-md bg-muted p-0.5" role="radiogroup" aria-label="Fiyat türü">
-                        {([
-                          ["sale", "Satış"],
-                          ["cost", "Alış"],
-                        ] as const).map(([t, label]) => (
-                          <button
-                            key={t}
-                            type="button"
-                            role="radio"
-                            aria-checked={priceType === t}
-                            onClick={() => changePriceType(t)}
-                            className={`h-7 rounded px-3 text-xs font-semibold transition-colors ${
-                              priceType === t ? "bg-card text-primary shadow-sm ring-1 ring-border" : "text-muted-foreground"
-                            }`}
-                          >
-                            {label}
-                          </button>
-                        ))}
-                      </div>
                     </div>
                     {!anyPrice ? (
                       <p className="px-3 py-3 text-xs text-muted-foreground">
@@ -707,36 +679,32 @@ export default function PanelPage() {
                       </p>
                     ) : (
                       <>
-                        <div className="grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-                          <div className="px-3 py-2.5">
-                            <p className="text-[11px] font-medium text-muted-foreground">
-                              Sayılan tutar ({isSale ? "satış" : "alış"} fiyatıyla)
-                            </p>
-                            <p className="text-xl font-bold tabular-nums leading-tight">{fmtTL(counted)}</p>
-                          </div>
-                          <div className="px-3 py-2.5">
-                            <p className="text-[11px] font-medium text-muted-foreground">Beklenen tutar (stok × fiyat)</p>
-                            <p className="text-xl font-bold tabular-nums leading-tight">{fmtTL(expected)}</p>
-                          </div>
-                          <div className="px-3 py-2.5">
-                            <p className="text-[11px] font-medium text-muted-foreground">Fark (sayılan − beklenen)</p>
-                            <p
-                              className={`text-xl font-bold tabular-nums leading-tight ${
-                                diff === 0 ? "" : diff > 0 ? "text-green-700 dark:text-green-400" : "text-amber-700 dark:text-amber-400"
-                              }`}
-                            >
-                              {diff > 0 ? "+" : ""}
-                              {fmtTL(diff)}
-                            </p>
-                          </div>
+                        <div className="grid grid-cols-[1fr_auto_auto] items-baseline gap-x-4 px-3 py-1 text-right">
+                          <span />
+                          <span className="py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Satış</span>
+                          <span className="py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Alış</span>
+                          {rows.map((r) => (
+                            <div key={r.label} className="contents">
+                              <span className="border-t py-2 text-left text-[12px] text-muted-foreground">{r.label}</span>
+                              <span className={`border-t py-2 text-base font-bold tabular-nums sm:text-lg ${r.sCls ?? ""}`}>
+                                {r.signed && r.s > 0 ? "+" : ""}
+                                {fmtTL(r.s)}
+                              </span>
+                              <span className={`border-t py-2 text-base font-bold tabular-nums sm:text-lg ${r.cCls ?? ""}`}>
+                                {r.signed && r.c > 0 ? "+" : ""}
+                                {fmtTL(r.c)}
+                              </span>
+                            </div>
+                          ))}
                         </div>
                         <p className="border-t px-3 py-1.5 text-[11px] text-muted-foreground">
-                          {priced.toLocaleString("tr-TR")} / {dash.totals.catalogCount.toLocaleString("tr-TR")} ürünün{" "}
-                          {isSale ? "satış" : "alış"} fiyatı tanımlı.
-                          {noPrice > 0 && (
+                          Fiyatı tanımlı ürün: satış {sale.priced.toLocaleString("tr-TR")}, alış{" "}
+                          {cost.priced.toLocaleString("tr-TR")} / {dash.totals.catalogCount.toLocaleString("tr-TR")}.
+                          {(sale.noPrice > 0 || cost.noPrice > 0) && (
                             <span className="font-medium text-amber-700 dark:text-amber-400">
                               {" "}
-                              Sayılan {noPrice.toLocaleString("tr-TR")} ürünün fiyatı yok, tutara dahil değil.
+                              Sayılan ürünlerden satış fiyatı olmayan {sale.noPrice.toLocaleString("tr-TR")}, alış fiyatı
+                              olmayan {cost.noPrice.toLocaleString("tr-TR")} ürün tutara dahil değil.
                             </span>
                           )}
                           {v.negativeStock > 0 && (
@@ -961,8 +929,8 @@ export default function PanelPage() {
                           )}
                           <TableHead className="h-9 text-xs text-right">Beklenen</TableHead>
                           <TableHead className="h-9 text-xs text-right">Sayılan</TableHead>
-                          <TableHead className="h-9 text-xs text-right hidden sm:table-cell">Fiyat</TableHead>
-                          <TableHead className="h-9 text-xs text-right">Tutar</TableHead>
+                          <TableHead className="h-9 text-xs text-right hidden sm:table-cell">Fiyat (satış / alış)</TableHead>
+                          <TableHead className="h-9 text-xs text-right">Tutar (satış / alış)</TableHead>
                           <TableHead className="h-9 text-xs">Durum</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -993,14 +961,19 @@ export default function PanelPage() {
                                 {fmtQty(r.counted)}
                               </TableCell>
                               <TableCell className="py-1.5 text-right text-xs tabular-nums text-muted-foreground hidden sm:table-cell">
-                                {(priceType === "sale" ? r.salePrice : r.costPrice) != null
-                                  ? fmtTLShort((priceType === "sale" ? r.salePrice : r.costPrice) as number)
-                                  : "—"}
+                                <div>{r.salePrice != null ? fmtTLShort(r.salePrice) : "—"}</div>
+                                <div>{r.costPrice != null ? fmtTLShort(r.costPrice) : "—"}</div>
                               </TableCell>
                               <TableCell className="py-1.5 text-right text-xs tabular-nums">
                                 {(() => {
-                                  const val = lineValue(r.counted, priceType === "sale" ? r.salePrice : r.costPrice)
-                                  return val == null ? "—" : fmtTLShort(val)
+                                  const sv = lineValue(r.counted, r.salePrice)
+                                  const cv = lineValue(r.counted, r.costPrice)
+                                  return (
+                                    <>
+                                      <div className="font-semibold">{sv == null ? "—" : fmtTLShort(sv)}</div>
+                                      <div className="text-muted-foreground">{cv == null ? "—" : fmtTLShort(cv)}</div>
+                                    </>
+                                  )
                                 })()}
                               </TableCell>
                               <TableCell className="py-1.5">
