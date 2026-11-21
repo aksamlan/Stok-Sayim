@@ -22,9 +22,9 @@ const db = new DatabaseSync(dbPath)
 db.exec("PRAGMA busy_timeout=30000")
 const upd = db.prepare("UPDATE products SET sale_price = ?, cost_price = ? WHERE store_id = ? AND barcode = ?")
 const stores = db.prepare("SELECT id, code, name FROM stores ORDER BY code").all()
-db.exec("BEGIN IMMEDIATE")
-try {
-  for (const s of stores) {
+for (const s of stores) {
+  db.exec("BEGIN IMMEDIATE")
+  try {
     let updated = 0, withSale = 0, withCost = 0, notInFile = 0
     for (const { barcode } of db.prepare("SELECT barcode FROM products WHERE store_id = ?").all(s.id)) {
       const v = byBarcode.get(barcode)
@@ -35,7 +35,7 @@ try {
     }
     db.prepare("INSERT INTO activity_log (store_id, at, actor, action, detail) VALUES (?, ?, 'Yönetici', 'price_upload', ?)").run(s.id, Date.now(), `${updated} ürünün fiyatı yüklendi (satış ${withSale}, alış ${withCost})`)
     console.log(`${s.code} ${s.name}: güncellenen ${updated} · satış fiyatlı ${withSale} · alış fiyatlı ${withCost} · dosyada yok ${notInFile}`)
-  }
-  db.exec("COMMIT")
-} catch (e) { db.exec("ROLLBACK"); throw e }
+    db.exec("COMMIT")
+  } catch (e) { db.exec("ROLLBACK"); throw e }
+}
 db.close()

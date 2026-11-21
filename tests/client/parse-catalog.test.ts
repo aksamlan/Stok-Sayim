@@ -3,6 +3,7 @@ import {
   buildCatalog,
   buildPriceList,
   detectColumns,
+  decodeCsv,
   parsePrice,
 } from "../../lib/store-client/parse-catalog"
 
@@ -107,4 +108,15 @@ test("buildCatalog/buildPriceList: fiyatlar okunur; fiyat sütunu yoksa alan hi�
     { barcode: "869", salePrice: null, costPrice: 5 },
     { barcode: "870", salePrice: 9, costPrice: null },
   ])
+})
+
+test("decodeCsv: UTF-8 (BOM'lu/BOM'suz) ve Windows-1254 Türkçe karakterleri bozmaz", () => {
+  const text = "Genel Alış Fiyatı;Malzeme Adı\nŞeker;ığüöç"
+  const utf8 = new TextEncoder().encode(text)
+  expect(decodeCsv(utf8.buffer as ArrayBuffer)).toBe(text)
+  const withBom = new Uint8Array([0xef, 0xbb, 0xbf, ...utf8])
+  expect(decodeCsv(withBom.buffer as ArrayBuffer)).toBe(text)
+  // Windows-1254: ş=0xFE ı=0xFD ğ=0xF0 ü=0xFC ö=0xF6 ç=0xE7, Ş=0xDE
+  const cp1254 = new Uint8Array([0xde, 0x65, 0x6b, 0x65, 0x72, 0x3b, 0xfd, 0xf0, 0xfc, 0xf6, 0xe7])
+  expect(decodeCsv(cp1254.buffer as ArrayBuffer)).toBe("Şeker;ığüöç")
 })

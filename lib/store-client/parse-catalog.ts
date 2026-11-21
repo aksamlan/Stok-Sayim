@@ -143,12 +143,24 @@ export function buildCatalog(
   return { items: [...byBarcode.values()], errors }
 }
 
+// CSV baytlarını metne çevirir: önce UTF-8 (BOM'lu/BOM'suz), geçerli UTF-8 değilse Windows-1254
+// (Türkçe Excel'in "CSV" kaydı). Aksi halde ı/ş/ğ bozulur ve sütun başlıkları tanınmaz.
+export function decodeCsv(buf: ArrayBuffer): string {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(buf).replace(/^\uFEFF/, "")
+  } catch {
+    return new TextDecoder("windows-1254").decode(buf)
+  }
+}
+
 export async function sheetToRows(
   file: File
 ): Promise<{ headers: string[]; rows: unknown[][] }> {
   const XLSX = await import("xlsx")
   const data = await file.arrayBuffer()
-  const wb = XLSX.read(data, { type: "array", raw: true })
+  const wb = /\.csv$/i.test(file.name)
+    ? XLSX.read(decodeCsv(data), { type: "string", raw: true })
+    : XLSX.read(data, { type: "array", raw: true })
   const ws = wb.Sheets[wb.SheetNames[0]]
   const all = XLSX.utils.sheet_to_json<unknown[]>(ws, {
     header: 1,
