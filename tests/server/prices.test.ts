@@ -95,3 +95,24 @@ test("yalnız fiyat güncelleme: stok/ad değişmez, verilmeyen alan korunur, li
   updatePrices(db, storeId, [{ barcode: "1", salePrice: 99 }])
   expect(getCatalog(db, other.storeId).items![0].salePrice).toBe(1)
 })
+
+test("karşılaştırma: fark adedi/tutarı (eksi stok 0), fiyatsızda tutar null; sıralama eksik/fazla/ad/fark", () => {
+  const { db, storeId, sessionId } = setup() // 1: stok 10, sat 22,5/alış 17,25 · 2: stok 4, sat 5 · 3: stok 2 fiyatsız
+  recordEvents(db, storeId, "Ali", [ev(sessionId, "1", 7), ev(sessionId, "2", 6), ev(sessionId, "3", 5), ev(sessionId, "777", 1)])
+  const rows = (sort: string) => dashboard(db, storeId, sessionId, { ...all, sort: sort as never }).rows
+  const r1 = rows("recent").find((r) => r.barcode === "1")!
+  expect(r1).toMatchObject({ diffQty: -3, diffSale: -67.5, diffCost: -51.75 }) // 3 eksik × fiyat
+  expect(rows("recent").find((r) => r.barcode === "2")).toMatchObject({ diffQty: 2, diffSale: 10, diffCost: null }) // fazla; alışı yok
+  expect(rows("recent").find((r) => r.barcode === "3")).toMatchObject({ diffQty: 3, diffSale: null, diffCost: null }) // fiyatsız
+  expect(rows("recent").find((r) => r.barcode === "777")).toMatchObject({ diffQty: 1, diffSale: null }) // listede yok
+  // sıralamalar
+  expect(rows("short_sale").map((r) => r.barcode).slice(0, 2)).toEqual(["1", "2"]) // en eksik (−67,5), sonra +10; fiyatsızlar sonda
+  expect(rows("over_sale")[0].barcode).toBe("2") // en fazla +10
+  expect(rows("diff_qty")[0].diffQty).toBe(-3)
+  expect(rows("name").map((r) => r.name).filter(Boolean)).toEqual(["Ekmek", "Fiyatsız", "Süt"])
+  expect(rows("sql;drop table products" as never).length).toBeGreaterThan(0) // bilinmeyen sıralama → varsayılan, enjeksiyon yok
+  // eksi stok farkta 0 sayılır
+  replaceCatalog(db, storeId, [{ barcode: "9", name: "Eksi", category: null, expected: -20, salePrice: 10 }])
+  recordEvents(db, storeId, "Ali", [ev(sessionId, "9", 2)])
+  expect(rows("recent").find((r) => r.barcode === "9")).toMatchObject({ diffQty: 2, diffSale: 20 })
+})

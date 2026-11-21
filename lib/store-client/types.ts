@@ -42,6 +42,9 @@ export type QueuedEvent = {
 export type DashboardRow = {
   salePrice: number | null
   costPrice: number | null
+  diffQty: number
+  diffSale: number | null
+  diffCost: number | null
   barcode: string
   name: string | null
   category: string | null

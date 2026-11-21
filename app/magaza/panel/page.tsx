@@ -133,6 +133,7 @@ export default function PanelPage() {
   const [sessions, setSessions] = useState<SessionInfo[] | null>(null)
   const [dash, setDash] = useState<DashboardResult | null>(null)
   const [filter, setFilter] = useState<"problems" | "all">("problems")
+  const [sort, setSort] = useState("recent")
   const [category, setCategory] = useState("")
   const [search, setSearch] = useState("")
   const [page, setPage] = useState(1)
@@ -241,6 +242,7 @@ export default function PanelPage() {
         filter,
         search: searchRef.current || undefined,
         category: category || undefined,
+        sort,
         page,
       })
       setDash(d)
@@ -248,7 +250,7 @@ export default function PanelPage() {
     } catch (err) {
       handleAuthError(err)
     }
-  }, [auth, viewSession, filter, category, page, handleAuthError])
+  }, [auth, viewSession, filter, category, sort, page, handleAuthError])
 
   // İlk yükleme + filtre değişimi + 5 sn canlı yenileme
   useEffect(() => {
@@ -899,6 +901,23 @@ export default function PanelPage() {
                   ))}
                 </select>
               )}
+              <select
+                value={sort}
+                onChange={(e) => {
+                  setSort(e.target.value)
+                  setPage(1)
+                }}
+                className="h-8 rounded-md border bg-card px-2 text-xs"
+                aria-label="Sırala"
+              >
+                <option value="recent">Sırala: son sayılan</option>
+                <option value="short_sale">En çok eksik ₺ (satış)</option>
+                <option value="over_sale">En çok fazla ₺ (satış)</option>
+                <option value="short_cost">En çok eksik ₺ (alış)</option>
+                <option value="over_cost">En çok fazla ₺ (alış)</option>
+                <option value="diff_qty">En büyük fark (adet)</option>
+                <option value="name">Ürün adı (A-Z)</option>
+              </select>
               <div className="relative flex-1 min-w-40">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
@@ -924,59 +943,69 @@ export default function PanelPage() {
                       <TableHeader className="sticky top-0 bg-card z-10 shadow-[0_1px_0_0_var(--border)]">
                         <TableRow>
                           <TableHead className="h-9 text-xs">Ürün</TableHead>
-                          {hasCategories && (
-                            <TableHead className="h-9 text-xs hidden sm:table-cell">Kategori</TableHead>
-                          )}
                           <TableHead className="h-9 text-xs text-right">Beklenen</TableHead>
                           <TableHead className="h-9 text-xs text-right">Sayılan</TableHead>
-                          <TableHead className="h-9 text-xs text-right hidden sm:table-cell">Fiyat (satış / alış)</TableHead>
-                          <TableHead className="h-9 text-xs text-right">Tutar (satış / alış)</TableHead>
-                          <TableHead className="h-9 text-xs">Durum</TableHead>
+                          <TableHead className="h-9 text-xs text-right">Fark</TableHead>
+                          <TableHead className="h-9 text-xs text-right" title="Fark × birim fiyat: eksi = eksik, artı = fazla">
+                            Fark ₺ <span className="font-normal text-muted-foreground">(satış / alış)</span>
+                          </TableHead>
+                          <TableHead className="h-9 text-xs text-right hidden md:table-cell">
+                            Sayılan ₺ <span className="font-normal text-muted-foreground">(satış / alış)</span>
+                          </TableHead>
+                          <TableHead className="h-9 text-xs hidden sm:table-cell">Durum</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {dash.rows.map((r) => {
                           const badge = STATUS_BADGE[r.status]
+                          const tone = (d: number) =>
+                            d === 0 ? "text-muted-foreground" : d > 0 ? "text-green-700 dark:text-green-400" : "text-amber-700 dark:text-amber-400"
+                          const signed = (d: number) => (d > 0 ? "+" : "") + fmtQty(d)
+                          const signedTL = (d: number | null) => (d == null ? "—" : (d > 0 ? "+" : "") + fmtTLShort(d))
+                          const sv = lineValue(r.counted, r.salePrice)
+                          const cv = lineValue(r.counted, r.costPrice)
                           return (
                             <TableRow key={r.barcode}>
                               <TableCell className="py-1.5">
                                 <p className="text-sm font-medium leading-tight">
-                                  {r.name ?? (
-                                    <span className="text-amber-700 dark:text-amber-400">Listede yok</span>
-                                  )}
+                                  {r.name ?? <span className="text-amber-700 dark:text-amber-400">Listede yok</span>}
                                 </p>
-                                <p className="font-mono text-[13px] text-muted-foreground leading-tight">
+                                <p className="font-mono text-[12px] text-muted-foreground leading-tight">
                                   {r.barcode}
+                                  {hasCategories && r.category ? (
+                                    <span className="hidden sm:inline font-sans"> · {r.category}</span>
+                                  ) : null}
                                 </p>
+                                {(r.salePrice != null || r.costPrice != null) && (
+                                  <p className="text-[11px] text-muted-foreground leading-tight">
+                                    Satış {r.salePrice != null ? fmtTLShort(r.salePrice) : "—"} · Alış{" "}
+                                    {r.costPrice != null ? fmtTLShort(r.costPrice) : "—"}
+                                  </p>
+                                )}
                               </TableCell>
-                              {hasCategories && (
-                                <TableCell className="py-1.5 text-xs text-muted-foreground hidden sm:table-cell">
-                                  {r.category ?? "—"}
-                                </TableCell>
-                              )}
-                              <TableCell className="py-1.5 text-right tabular-nums">
+                              <TableCell
+                                className={`py-1.5 text-right tabular-nums ${r.expected != null && r.expected < 0 ? "text-destructive" : ""}`}
+                                title={r.expected != null && r.expected < 0 ? "Stok dosyasında eksi stok; farkta 0 sayıldı" : undefined}
+                              >
                                 {r.expected == null ? "—" : fmtQty(r.expected)}
                               </TableCell>
-                              <TableCell className="py-1.5 text-right font-bold tabular-nums">
-                                {fmtQty(r.counted)}
-                              </TableCell>
-                              <TableCell className="py-1.5 text-right text-xs tabular-nums text-muted-foreground hidden sm:table-cell">
-                                <div>{r.salePrice != null ? fmtTLShort(r.salePrice) : "—"}</div>
-                                <div>{r.costPrice != null ? fmtTLShort(r.costPrice) : "—"}</div>
+                              <TableCell className="py-1.5 text-right font-bold tabular-nums">{fmtQty(r.counted)}</TableCell>
+                              <TableCell className={`py-1.5 text-right font-semibold tabular-nums ${tone(r.diffQty)}`}>
+                                {signed(r.diffQty)}
                               </TableCell>
                               <TableCell className="py-1.5 text-right text-xs tabular-nums">
-                                {(() => {
-                                  const sv = lineValue(r.counted, r.salePrice)
-                                  const cv = lineValue(r.counted, r.costPrice)
-                                  return (
-                                    <>
-                                      <div className="font-semibold">{sv == null ? "—" : fmtTLShort(sv)}</div>
-                                      <div className="text-muted-foreground">{cv == null ? "—" : fmtTLShort(cv)}</div>
-                                    </>
-                                  )
-                                })()}
+                                <div className={`font-semibold ${r.diffSale == null ? "text-muted-foreground" : tone(r.diffSale)}`}>
+                                  {signedTL(r.diffSale)}
+                                </div>
+                                <div className={r.diffCost == null ? "text-muted-foreground" : tone(r.diffCost)}>
+                                  {signedTL(r.diffCost)}
+                                </div>
                               </TableCell>
-                              <TableCell className="py-1.5">
+                              <TableCell className="py-1.5 text-right text-xs tabular-nums hidden md:table-cell">
+                                <div className="font-semibold">{sv == null ? "—" : fmtTLShort(sv)}</div>
+                                <div className="text-muted-foreground">{cv == null ? "—" : fmtTLShort(cv)}</div>
+                              </TableCell>
+                              <TableCell className="py-1.5 hidden sm:table-cell">
                                 <Badge variant="outline" className={badge.cls}>
                                   {badge.label}
                                 </Badge>

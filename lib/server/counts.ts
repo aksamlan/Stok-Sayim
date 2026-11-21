@@ -13,6 +13,10 @@ export type ScanEvent = {
 export type DashboardRow = {
   salePrice: number | null
   costPrice: number | null
+  // Karşılaştırma: sayılan − beklenen (eksi stok 0 sayılır); fiyat yoksa tutar null
+  diffQty: number
+  diffSale: number | null
+  diffCost: number | null
   barcode: string
   name: string | null
   category: string | null
@@ -177,6 +181,19 @@ statused AS (
 )
 `
 
+export type DashSort = "recent" | "short_sale" | "over_sale" | "short_cost" | "over_cost" | "diff_qty" | "name"
+
+// Sıralama beyaz listesi (kullanıcı girdisi SQL'e girmez)
+const SORT_SQL: Record<DashSort, string> = {
+  recent: `(counted <> 0) DESC, last_at DESC, (status = 'only-count') DESC, category IS NULL, category, barcode`,
+  short_sale: `(diffSale IS NULL), diffSale ASC, barcode`,
+  over_sale: `(diffSale IS NULL), diffSale DESC, barcode`,
+  short_cost: `(diffCost IS NULL), diffCost ASC, barcode`,
+  over_cost: `(diffCost IS NULL), diffCost DESC, barcode`,
+  diff_qty: `ABS(diffQty) DESC, barcode`,
+  name: `(name IS NULL), tr_lower(name), barcode`,
+}
+
 export function dashboard(
   db: DatabaseSync,
   storeId: string,
@@ -185,6 +202,7 @@ export function dashboard(
     filter: "problems" | "all"
     search?: string
     category?: string
+    sort?: DashSort
     page: number
     pageSize: number
   }
@@ -216,10 +234,14 @@ export function dashboard(
   try {
     const rows = db
       .prepare(
-        `SELECT barcode, name, category, expected, counted, status,
-                sale_price AS salePrice, cost_price AS costPrice FROM temp.dash_rows ${whereSql}
-         ORDER BY (counted <> 0) DESC, last_at DESC, (status = 'only-count') DESC,
-                  category IS NULL, category, barcode
+        `SELECT * FROM (
+           SELECT barcode, name, category, expected, counted, status, last_at,
+                  sale_price AS salePrice, cost_price AS costPrice,
+                  ROUND(counted - MAX(COALESCE(expected, 0), 0), 2) AS diffQty,
+                  CASE WHEN sale_price > 0 THEN ROUND((counted - MAX(COALESCE(expected, 0), 0)) * sale_price, 2) END AS diffSale,
+                  CASE WHEN cost_price > 0 THEN ROUND((counted - MAX(COALESCE(expected, 0), 0)) * cost_price, 2) END AS diffCost
+           FROM temp.dash_rows ${whereSql}
+         ) ORDER BY ${SORT_SQL[opts.sort && opts.sort in SORT_SQL ? opts.sort : "recent"]}
          LIMIT ? OFFSET ?`
       )
       .all(...whereParams, pageSize, (page - 1) * pageSize) as DashboardRow[]

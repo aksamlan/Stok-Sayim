@@ -188,6 +188,7 @@ export function apiDashboard(
     filter: "problems" | "all"
     search?: string
     category?: string
+    sort?: string
     page: number
   }
 ): Promise<DashboardResult> {
@@ -198,6 +199,7 @@ export function apiDashboard(
   })
   if (params.search) q.set("search", params.search)
   if (params.category) q.set("category", params.category)
+  if (params.sort) q.set("sort", params.sort)
   return request(`/api/dashboard?${q}`, { token })
 }
 

@@ -1,5 +1,5 @@
 import { ApiError, requireAuth } from "@/lib/server/auth"
-import { dashboard } from "@/lib/server/counts"
+import { dashboard, type DashSort } from "@/lib/server/counts"
 import { getDb } from "@/lib/server/db"
 import { handle, json } from "@/lib/server/http"
 
@@ -14,6 +14,7 @@ export const GET = handle((req) => {
       filter: params.get("filter") === "all" ? "all" : "problems",
       search: params.get("search") ?? undefined,
       category: params.get("category") ?? undefined,
+      sort: (params.get("sort") ?? undefined) as DashSort | undefined,
       page: Number(params.get("page") ?? 1) || 1,
       pageSize: 100,
     })
