@@ -70,3 +70,33 @@ test("marka görseli: PNG kabul, SVG/bozuk reddedilir, sıfırlayınca varsayıl
   resetBrand(db, "icon")
   expect(brandStatus(db).iconCustom).toBe(false)
 })
+
+test("v5→v6 geçiş: eski şemadaki (fiyat kolonsuz) veritabanı açılır, ürünler korunur, kolonlar eklenir", async () => {
+  const { DatabaseSync } = await import("node:sqlite")
+  const dir = mkdtempSync(path.join(tmpdir(), "stokdb-"))
+  const p = path.join(dir, "stok.db")
+  // Canlıdakine benzer: v5 damgalı, products'ta fiyat kolonları YOK, mağaza + ürün + okutma var
+  const old = new DatabaseSync(p)
+  old.exec(`
+    CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    INSERT INTO meta VALUES ('schema_version', '5');
+    CREATE TABLE stores (id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+      count_pw_hash TEXT NOT NULL, admin_pw_hash TEXT NOT NULL, catalog_version INTEGER NOT NULL DEFAULT 0,
+      token_version INTEGER NOT NULL DEFAULT 1, email TEXT, phone TEXT, email_verified_at INTEGER,
+      cleanup_warned_at INTEGER, last_seen_at INTEGER, created_at INTEGER NOT NULL);
+    CREATE TABLE products (store_id TEXT NOT NULL, barcode TEXT NOT NULL, name TEXT NOT NULL,
+      category TEXT, expected_qty REAL, PRIMARY KEY (store_id, barcode));
+    INSERT INTO stores (id, code, name, count_pw_hash, admin_pw_hash, created_at) VALUES ('s1','AAAAAA','Şube','x','y',1);
+    INSERT INTO products VALUES ('s1','869','Süt','K',5);
+  `)
+  old.close()
+  const db = openDatabase(p)
+  const cols = (db.prepare("PRAGMA table_info(products)").all() as { name: string }[]).map((c) => c.name)
+  expect(cols).toContain("sale_price")
+  expect(cols).toContain("cost_price")
+  expect(db.prepare("SELECT name, expected_qty, sale_price FROM products").get()).toMatchObject({ name: "Süt", expected_qty: 5, sale_price: null })
+  expect(getMeta(db, "schema_version")).toBe("6")
+  db.close()
+  // ikinci açılış sorunsuz (idempotent)
+  openDatabase(p).close()
+})

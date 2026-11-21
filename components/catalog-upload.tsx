@@ -11,10 +11,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { apiPutCatalog } from "@/lib/store-client/api"
+import { apiPutCatalog, apiPutPrices } from "@/lib/store-client/api"
 import {
   buildCatalog,
+  buildPriceList,
   detectColumns,
+  fillRate,
   sheetToRows,
   type ColumnMap,
 } from "@/lib/store-client/parse-catalog"
@@ -31,6 +33,8 @@ const COLUMN_LABELS: { key: keyof ColumnMap; label: string; optional: boolean }[
   { key: "name", label: "Ürün Adı", optional: false },
   { key: "category", label: "Kategori", optional: true },
   { key: "expected", label: "Beklenen Stok", optional: true },
+  { key: "salePrice", label: "Satış Fiyatı", optional: true },
+  { key: "costPrice", label: "Alış Fiyatı", optional: true },
 ]
 
 export function CatalogUpload({
@@ -56,7 +60,7 @@ export function CatalogUpload({
         toast.error("Dosyada veri satırı bulunamadı")
         return
       }
-      setParsed({ fileName: file.name, headers, rows, cols: detectColumns(headers) })
+      setParsed({ fileName: file.name, headers, rows, cols: detectColumns(headers, rows) })
     } catch {
       toast.error("Dosya okunamadı — XLSX veya CSV olmalı")
     }
@@ -65,6 +69,35 @@ export function CatalogUpload({
   const setCol = (key: keyof ColumnMap, value: number) => {
     if (!parsed) return
     setParsed({ ...parsed, cols: { ...parsed.cols, [key]: value } })
+  }
+
+  const hasPriceCols = !!parsed && ((parsed.cols.salePrice ?? -1) >= 0 || (parsed.cols.costPrice ?? -1) >= 0)
+
+  // Yalnız fiyatlar: ürün listesi, stok ve sayımlara dokunmaz
+  const handlePricesOnly = async () => {
+    if (!parsed || busy) return
+    const { items, errors } = buildPriceList(parsed.rows, parsed.cols)
+    if (items.length === 0) {
+      toast.error("Geçerli satır yok", { description: errors.slice(0, 3).join(" · ") })
+      return
+    }
+    setBusy(true)
+    try {
+      const res = await apiPutPrices(token, items)
+      toast.success(`${res.updated.toLocaleString("tr-TR")} ürünün fiyatı güncellendi`, {
+        description:
+          res.missing > 0
+            ? `${res.missing.toLocaleString("tr-TR")} barkod ürün listesinde yok, atlandı`
+            : undefined,
+        duration: res.missing > 0 ? 8000 : 3000,
+      })
+      setParsed(null)
+      onUploaded()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Fiyatlar güncellenemedi")
+    } finally {
+      setBusy(false)
+    }
   }
 
   const handleUpload = async () => {
@@ -106,8 +139,9 @@ export function CatalogUpload({
           </span>
         </CardTitle>
         <CardDescription className="text-xs">
-          Barkod + ürün adı (+ kategori + beklenen stok) içeren XLSX/CSV yükle.
-          Yeni yükleme eskisinin yerine geçer.
+          Barkod + ürün adı (+ kategori + beklenen stok + satış/alış fiyatı) içeren XLSX/CSV yükle.
+          Yeni liste eskisinin yerine geçer (fiyat sütunu yoksa mevcut fiyatlar korunur). Yalnız
+          fiyatları da güncelleyebilirsin.
         </CardDescription>
       </CardHeader>
       <CardContent className="p-3">
@@ -157,7 +191,7 @@ export function CatalogUpload({
               <span className="font-medium text-foreground">{parsed.fileName}</span> ·{" "}
               {parsed.rows.length.toLocaleString("tr-TR")} satır. Sütunları kontrol et:
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {COLUMN_LABELS.map(({ key, label, optional }) => (
                 <div key={key} className="space-y-1">
                   <label className="text-[11px] font-medium text-muted-foreground">
@@ -165,7 +199,7 @@ export function CatalogUpload({
                     {optional ? " (ops.)" : ""}
                   </label>
                   <select
-                    value={parsed.cols[key]}
+                    value={parsed.cols[key] ?? -1}
                     onChange={(e) => setCol(key, Number(e.target.value))}
                     className="w-full h-8 rounded-md border bg-background px-2 text-xs"
                   >
@@ -176,6 +210,15 @@ export function CatalogUpload({
                       </option>
                     ))}
                   </select>
+                  {(key === "salePrice" || key === "costPrice") && (parsed.cols[key] ?? -1) >= 0 && (() => {
+                    const r = fillRate(parsed.rows, parsed.cols[key] as number)
+                    return (
+                      <p className={`text-[10px] ${r < 0.2 ? "font-semibold text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}>
+                        {r < 0.2 ? "⚠ " : ""}satırların %{Math.round(r * 100)}&apos;i dolu
+                        {r < 0.2 ? " — başka sütun seç" : ""}
+                      </p>
+                    )
+                  })()}
                 </div>
               ))}
             </div>
@@ -189,6 +232,8 @@ export function CatalogUpload({
                         parsed.cols.name,
                         parsed.cols.category,
                         parsed.cols.expected,
+                        parsed.cols.salePrice ?? -1,
+                        parsed.cols.costPrice ?? -1,
                       ].map((ci, k) => (
                         <td key={k} className="px-2 py-1 whitespace-nowrap">
                           {ci >= 0 ? String(row[ci] ?? "") : "—"}
@@ -199,15 +244,27 @@ export function CatalogUpload({
                 </tbody>
               </table>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Button size="sm" className="h-9" disabled={busy} onClick={handleUpload}>
                 {busy ? (
                   <Loader2 className="h-4 w-4 mr-1 animate-spin" />
                 ) : (
                   <Upload className="h-4 w-4 mr-1" />
                 )}
-                Yükle ({parsed.rows.length.toLocaleString("tr-TR")} satır)
+                Ürün listesini yükle ({parsed.rows.length.toLocaleString("tr-TR")} satır)
               </Button>
+              {hasPriceCols && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-9"
+                  disabled={busy}
+                  onClick={handlePricesOnly}
+                  title="Ürün listesi ve stoklar aynen kalır, yalnız fiyatlar güncellenir"
+                >
+                  Yalnız fiyatları güncelle
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="ghost"

@@ -35,3 +35,14 @@ test("kilolu ürün: CSV'de ondalık virgül, fark yuvarlanır", async () => {
   const csv = compareToCSV([{ barcode: "9", stockQty: 0.1, countQty: 0.3, status: "difference" }])
   expect(csv).toContain("9;0,1;0,3;+0,2;") // 0.3-0.1 = 0.19999… değil +0,2
 })
+
+test("rapor: fiyat ve tutar sütunları (virgüllü), fiyatsız ürün boş", () => {
+  const csv = storeReportToCSV([
+    row({ counted: 3, salePrice: 22.5, costPrice: 17.25 }),
+    row({ barcode: "870", counted: 2 }), // fiyatı yok
+  ])
+  const [head, l1, l2] = csv.split("\r\n")
+  expect(head.endsWith("Satış Fiyatı;Alış Fiyatı;Satış Tutarı;Alış Tutarı")).toBe(true)
+  expect(l1.endsWith(";22,5;17,25;67,5;51,75")).toBe(true) // 3×22,5=67,5 · 3×17,25=51,75
+  expect(l2.endsWith(";;;;")).toBe(true)
+})

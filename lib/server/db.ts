@@ -36,6 +36,8 @@ CREATE TABLE IF NOT EXISTS products (
   name TEXT NOT NULL,
   category TEXT,
   expected_qty REAL,
+  sale_price REAL,
+  cost_price REAL,
   PRIMARY KEY (store_id, barcode)
 );
 CREATE TABLE IF NOT EXISTS scan_events (
@@ -90,6 +92,9 @@ const MIGRATIONS: string[] = [
   // v5: son kullanım damgası — giriş/pano kullanımı da aktivite sayılır,
   // hareketsizlik temizliği aktif kullanılan mağazayı silemez
   "ALTER TABLE stores ADD COLUMN last_seen_at INTEGER",
+  // v6: ürün fiyatları (yönetici tarafında tutar hesabı için; sayımcıya gönderilmez)
+  "ALTER TABLE products ADD COLUMN sale_price REAL;\n" +
+    "ALTER TABLE products ADD COLUMN cost_price REAL",
 ]
 const SCHEMA_TARGET = 1 + MIGRATIONS.length
 
@@ -125,6 +130,13 @@ function applyMigrations(db: DatabaseSync, fresh: boolean): void {
   if (!raw) setMeta(db, "schema_version", String(SCHEMA_TARGET))
 }
 
+// Sürüm damgası yokken "güncel" sanılan eski bir veritabanında bile fiyat kolonları bulunsun.
+function ensureProductPriceColumns(db: DatabaseSync): void {
+  const cols = (db.prepare("PRAGMA table_info(products)").all() as { name: string }[]).map((c) => c.name)
+  if (!cols.includes("sale_price")) db.exec("ALTER TABLE products ADD COLUMN sale_price REAL")
+  if (!cols.includes("cost_price")) db.exec("ALTER TABLE products ADD COLUMN cost_price REAL")
+}
+
 export function openDatabase(dbPath: string): DatabaseSync {
   if (dbPath !== ":memory:") {
     mkdirSync(path.dirname(dbPath), { recursive: true })
@@ -149,6 +161,7 @@ export function openDatabase(dbPath: string): DatabaseSync {
     value == null ? null : String(value).toLocaleLowerCase("tr")
   )
   applyMigrations(db, fresh)
+  ensureProductPriceColumns(db)
   return db
 }
 

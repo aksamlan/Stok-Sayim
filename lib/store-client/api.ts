@@ -151,6 +151,13 @@ export function apiCatalogCount(
   return request("/api/catalog?countOnly=1", { token })
 }
 
+export function apiPutPrices(
+  token: string,
+  items: { barcode: string; salePrice?: number | null; costPrice?: number | null }[]
+): Promise<{ updated: number; missing: number }> {
+  return request("/api/catalog/prices", { method: "PUT", token, body: { items } })
+}
+
 export function apiPutCatalog(
   token: string,
   items: CatalogItem[]

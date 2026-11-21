@@ -9,6 +9,7 @@ import {
   ClipboardList,
   Copy,
   Download,
+  Coins,
   Eraser,
   Pencil,
   MoreVertical,
@@ -31,6 +32,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { Toaster, toast } from "sonner"
 import { PoweredByStokzen, StokzenWordmark } from "@/components/stokzen"
 import { ActivityLog } from "@/components/activity-log"
+import { fmtTL, fmtTLShort, lineValue } from "@/lib/money"
 import { fmtQty, round2 } from "@/lib/qty"
 import { RenameStoreDialog } from "@/components/rename-store-dialog"
 import { CatalogUpload } from "@/components/catalog-upload"
@@ -138,6 +140,20 @@ export default function PanelPage() {
   const [newSessionName, setNewSessionName] = useState("")
   const [closeConfirm, setCloseConfirm] = useState(false)
   // Sunucu saati − cihaz saati: "x dk önce" cihaz saatinden bağımsız doğru olsun
+  // Tutar hangi fiyata göre hesaplansın: satış ya da alış (maliyet); tercih cihazda saklanır
+  const [priceType, setPriceType] = useState<"sale" | "cost">("sale")
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem("magazaFiyatTuru")
+      if (v === "sale" || v === "cost") setPriceType(v)
+    } catch {}
+  }, [])
+  const changePriceType = (t: "sale" | "cost") => {
+    setPriceType(t)
+    try {
+      localStorage.setItem("magazaFiyatTuru", t)
+    } catch {}
+  }
   const [skew, setSkew] = useState(0)
   const [renameOpen, setRenameOpen] = useState(false)
   const [detailCounter, setDetailCounter] = useState<string | null>(null)
@@ -648,6 +664,89 @@ export default function PanelPage() {
               </div>
             </div>
 
+            {/* Tutarlar (fiyat tanımlıysa) */}
+            {(() => {
+              const v = dash.totals.value
+              const isSale = priceType === "sale"
+              const counted = isSale ? v.saleCounted : v.costCounted
+              const expected = isSale ? v.saleExpected : v.costExpected
+              const priced = isSale ? v.salePriced : v.costPriced
+              const noPrice = isSale ? v.countedNoSale : v.countedNoCost
+              const diff = round2(counted - expected)
+              const anyPrice = v.salePriced > 0 || v.costPriced > 0
+              return (
+                <Card className="mb-3 py-0 gap-0 overflow-hidden">
+                  <CardContent className="p-0">
+                    <div className="flex items-center gap-2 border-b px-3 py-2">
+                      <Coins className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-medium">Tutar</span>
+                      <div className="ml-auto grid grid-cols-2 gap-0.5 rounded-md bg-muted p-0.5" role="radiogroup" aria-label="Fiyat türü">
+                        {([
+                          ["sale", "Satış"],
+                          ["cost", "Alış"],
+                        ] as const).map(([t, label]) => (
+                          <button
+                            key={t}
+                            type="button"
+                            role="radio"
+                            aria-checked={priceType === t}
+                            onClick={() => changePriceType(t)}
+                            className={`h-7 rounded px-3 text-xs font-semibold transition-colors ${
+                              priceType === t ? "bg-card text-primary shadow-sm ring-1 ring-border" : "text-muted-foreground"
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {!anyPrice ? (
+                      <p className="px-3 py-3 text-xs text-muted-foreground">
+                        Henüz fiyat yüklenmemiş. Aşağıdaki <b>Ürün Listesi</b> bölümünden satış/alış fiyatı
+                        içeren dosyayı seç.
+                      </p>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+                          <div className="px-3 py-2.5">
+                            <p className="text-[11px] font-medium text-muted-foreground">
+                              Sayılan tutar ({isSale ? "satış" : "alış"} fiyatıyla)
+                            </p>
+                            <p className="text-xl font-bold tabular-nums leading-tight">{fmtTL(counted)}</p>
+                          </div>
+                          <div className="px-3 py-2.5">
+                            <p className="text-[11px] font-medium text-muted-foreground">Beklenen tutar (stok × fiyat)</p>
+                            <p className="text-xl font-bold tabular-nums leading-tight">{fmtTL(expected)}</p>
+                          </div>
+                          <div className="px-3 py-2.5">
+                            <p className="text-[11px] font-medium text-muted-foreground">Fark (sayılan − beklenen)</p>
+                            <p
+                              className={`text-xl font-bold tabular-nums leading-tight ${
+                                diff === 0 ? "" : diff > 0 ? "text-green-700 dark:text-green-400" : "text-amber-700 dark:text-amber-400"
+                              }`}
+                            >
+                              {diff > 0 ? "+" : ""}
+                              {fmtTL(diff)}
+                            </p>
+                          </div>
+                        </div>
+                        <p className="border-t px-3 py-1.5 text-[11px] text-muted-foreground">
+                          {priced.toLocaleString("tr-TR")} / {dash.totals.catalogCount.toLocaleString("tr-TR")} ürünün{" "}
+                          {isSale ? "satış" : "alış"} fiyatı tanımlı.
+                          {noPrice > 0 && (
+                            <span className="font-medium text-amber-700 dark:text-amber-400">
+                              {" "}
+                              Sayılan {noPrice.toLocaleString("tr-TR")} ürünün fiyatı yok, tutara dahil değil.
+                            </span>
+                          )}
+                        </p>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              )
+            })()}
+
             {/* Sayımcılar */}
             <Card className="mb-3 py-0 gap-0 overflow-hidden">
               <CardContent className="p-0">
@@ -856,6 +955,8 @@ export default function PanelPage() {
                           )}
                           <TableHead className="h-9 text-xs text-right">Beklenen</TableHead>
                           <TableHead className="h-9 text-xs text-right">Sayılan</TableHead>
+                          <TableHead className="h-9 text-xs text-right hidden sm:table-cell">Fiyat</TableHead>
+                          <TableHead className="h-9 text-xs text-right">Tutar</TableHead>
                           <TableHead className="h-9 text-xs">Durum</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -884,6 +985,17 @@ export default function PanelPage() {
                               </TableCell>
                               <TableCell className="py-1.5 text-right font-bold tabular-nums">
                                 {fmtQty(r.counted)}
+                              </TableCell>
+                              <TableCell className="py-1.5 text-right text-xs tabular-nums text-muted-foreground hidden sm:table-cell">
+                                {(priceType === "sale" ? r.salePrice : r.costPrice) != null
+                                  ? fmtTLShort((priceType === "sale" ? r.salePrice : r.costPrice) as number)
+                                  : "—"}
+                              </TableCell>
+                              <TableCell className="py-1.5 text-right text-xs tabular-nums">
+                                {(() => {
+                                  const val = lineValue(r.counted, priceType === "sale" ? r.salePrice : r.costPrice)
+                                  return val == null ? "—" : fmtTLShort(val)
+                                })()}
                               </TableCell>
                               <TableCell className="py-1.5">
                                 <Badge variant="outline" className={badge.cls}>

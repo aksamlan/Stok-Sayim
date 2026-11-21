@@ -11,12 +11,25 @@ export type ScanEvent = {
 }
 
 export type DashboardRow = {
+  salePrice: number | null
+  costPrice: number | null
   barcode: string
   name: string | null
   category: string | null
   expected: number | null
   counted: number
   status: "match" | "difference" | "only-stock" | "only-count"
+}
+
+export type ValueTotals = {
+  saleCounted: number
+  saleExpected: number
+  costCounted: number
+  costExpected: number
+  salePriced: number // fiyatı tanımlı katalog ürünü sayısı
+  costPriced: number
+  countedNoSale: number // sayılmış ama satış fiyatı olmayan ürün sayısı
+  countedNoCost: number
 }
 
 export type DashboardResult = {
@@ -26,6 +39,8 @@ export type DashboardResult = {
     counters: number
     unknownCount: number
     catalogCount: number
+    // Tutarlar (TL): sayılan × fiyat, beklenen × fiyat. Fiyatı olmayan ürün tutara 0 katar.
+    value: ValueTotals
   }
   byCounter: { counter: string; qty: number; distinct: number; lastAt: number }[]
   byCategory: {
@@ -137,17 +152,18 @@ WITH agg AS (
 all_rows AS (
   SELECT p.barcode AS barcode, p.name AS name, p.category AS category,
          p.expected_qty AS expected, COALESCE(a.counted, 0) AS counted,
-         1 AS in_catalog, a.last_at AS last_at
+         1 AS in_catalog, a.last_at AS last_at,
+         p.sale_price AS sale_price, p.cost_price AS cost_price
   FROM products p LEFT JOIN agg a ON a.barcode = p.barcode
   WHERE p.store_id = ?
   UNION ALL
-  SELECT a.barcode, NULL, NULL, NULL, a.counted, 0, a.last_at
+  SELECT a.barcode, NULL, NULL, NULL, a.counted, 0, a.last_at, NULL, NULL
   FROM agg a
   WHERE a.counted <> 0
     AND NOT EXISTS (SELECT 1 FROM products p WHERE p.store_id = ? AND p.barcode = a.barcode)
 ),
 statused AS (
-  SELECT barcode, name, category, expected, counted, last_at,
+  SELECT barcode, name, category, expected, counted, last_at, sale_price, cost_price,
     CASE
       WHEN in_catalog = 0 THEN 'only-count'
       WHEN counted = 0 THEN 'only-stock'
@@ -198,7 +214,8 @@ export function dashboard(
   try {
     const rows = db
       .prepare(
-        `SELECT barcode, name, category, expected, counted, status FROM temp.dash_rows ${whereSql}
+        `SELECT barcode, name, category, expected, counted, status,
+                sale_price AS salePrice, cost_price AS costPrice FROM temp.dash_rows ${whereSql}
          ORDER BY (counted <> 0) DESC, last_at DESC, (status = 'only-count') DESC,
                   category IS NULL, category, barcode
          LIMIT ? OFFSET ?`
@@ -216,7 +233,15 @@ export function dashboard(
         `SELECT ROUND(COALESCE(SUM(counted), 0), 2) AS totalQty,
            COALESCE(SUM(counted <> 0 AND status <> 'only-count'), 0) AS distinctCounted,
            COALESCE(SUM(status = 'only-count'), 0) AS unknownCount,
-           COALESCE(SUM(status <> 'only-count'), 0) AS catalogCount
+           COALESCE(SUM(status <> 'only-count'), 0) AS catalogCount,
+           ROUND(COALESCE(SUM(counted * COALESCE(sale_price, 0)), 0), 2) AS saleCounted,
+           ROUND(COALESCE(SUM(COALESCE(expected, 0) * COALESCE(sale_price, 0)), 0), 2) AS saleExpected,
+           ROUND(COALESCE(SUM(counted * COALESCE(cost_price, 0)), 0), 2) AS costCounted,
+           ROUND(COALESCE(SUM(COALESCE(expected, 0) * COALESCE(cost_price, 0)), 0), 2) AS costExpected,
+           COALESCE(SUM(status <> 'only-count' AND COALESCE(sale_price, 0) > 0), 0) AS salePriced,
+           COALESCE(SUM(status <> 'only-count' AND COALESCE(cost_price, 0) > 0), 0) AS costPriced,
+           COALESCE(SUM(counted <> 0 AND COALESCE(sale_price, 0) <= 0), 0) AS countedNoSale,
+           COALESCE(SUM(counted <> 0 AND COALESCE(cost_price, 0) <= 0), 0) AS countedNoCost
          FROM temp.dash_rows`
       )
       .get() as {
@@ -224,7 +249,7 @@ export function dashboard(
       distinctCounted: number
       unknownCount: number
       catalogCount: number
-    }
+    } & ValueTotals
 
     const countersRow = db
       .prepare(
@@ -279,7 +304,7 @@ function buildResult(
     distinctCounted: number
     unknownCount: number
     catalogCount: number
-  },
+  } & ValueTotals,
   counters: number,
   byCounter: { counter: string; qty: number; distinct_n: number; lastAt: number }[],
   byCategory: {
@@ -298,6 +323,16 @@ function buildResult(
       counters,
       unknownCount: totals.unknownCount,
       catalogCount: totals.catalogCount,
+      value: {
+        saleCounted: totals.saleCounted,
+        saleExpected: totals.saleExpected,
+        costCounted: totals.costCounted,
+        costExpected: totals.costExpected,
+        salePriced: totals.salePriced,
+        costPriced: totals.costPriced,
+        countedNoSale: totals.countedNoSale,
+        countedNoCost: totals.countedNoCost,
+      },
     },
     byCounter: byCounter.map((c) => ({
       counter: c.counter,

@@ -14,6 +14,8 @@ export type CatalogItem = {
   name: string
   category: string | null
   expected: number | null
+  salePrice?: number | null
+  costPrice?: number | null
 }
 
 export type CatalogEntry = {
@@ -38,12 +40,25 @@ export type QueuedEvent = {
 }
 
 export type DashboardRow = {
+  salePrice: number | null
+  costPrice: number | null
   barcode: string
   name: string | null
   category: string | null
   expected: number | null
   counted: number
   status: "match" | "difference" | "only-stock" | "only-count"
+}
+
+export type ValueTotals = {
+  saleCounted: number
+  saleExpected: number
+  costCounted: number
+  costExpected: number
+  salePriced: number
+  costPriced: number
+  countedNoSale: number
+  countedNoCost: number
 }
 
 export type DashboardResult = {
@@ -53,6 +68,7 @@ export type DashboardResult = {
     counters: number
     unknownCount: number
     catalogCount: number
+    value: ValueTotals
   }
   byCounter: { counter: string; qty: number; distinct: number; lastAt: number }[]
   byCategory: {

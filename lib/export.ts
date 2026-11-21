@@ -250,6 +250,9 @@ export interface StoreReportRow {
   expected: number | null
   counted: number
   status: CompareRow["status"]
+  // Yalnız yönetici raporunda: birim fiyatlar (TL); yoksa boş
+  salePrice?: number | null
+  costPrice?: number | null
 }
 
 const storeDiffText = (r: StoreReportRow) => {
@@ -259,9 +262,14 @@ const storeDiffText = (r: StoreReportRow) => {
   return d > 0 ? `+${csvQty(d)}` : csvQty(d)
 }
 
+const lineTL = (qty: number, price: number | null | undefined): number | "" =>
+  price != null && price > 0 ? round2(qty * price) : ""
+const csvTL = (v: number | null | undefined | ""): string =>
+  v === "" || v == null ? "" : csvQty(v)
+
 export const storeReportToCSV = (rows: StoreReportRow[]) =>
   [
-    "Barkod;Ürün Adı;Kategori;Beklenen;Sayılan;Fark;Durum",
+    "Barkod;Ürün Adı;Kategori;Beklenen;Sayılan;Fark;Durum;Satış Fiyatı;Alış Fiyatı;Satış Tutarı;Alış Tutarı",
     ...rows.map(r =>
       [
         csvCell(r.barcode),
@@ -271,6 +279,10 @@ export const storeReportToCSV = (rows: StoreReportRow[]) =>
         csvQty(r.counted),
         storeDiffText(r),
         STATUS_TEXT[r.status],
+        csvTL(r.salePrice),
+        csvTL(r.costPrice),
+        csvTL(lineTL(r.counted, r.salePrice)),
+        csvTL(lineTL(r.counted, r.costPrice)),
       ].join(";")
     ),
   ].join("\r\n")
@@ -296,7 +308,7 @@ export const downloadStoreReportXLSX = async (
 ) => {
   const XLSX = await import("xlsx")
   const ws = XLSX.utils.aoa_to_sheet([
-    ["Barkod", "Ürün Adı", "Kategori", "Beklenen", "Sayılan", "Fark", "Durum"],
+    ["Barkod", "Ürün Adı", "Kategori", "Beklenen", "Sayılan", "Fark", "Durum", "Satış Fiyatı", "Alış Fiyatı", "Satış Tutarı", "Alış Tutarı"],
     ...rows.map(r => [
       r.barcode,
       r.name ?? "",
@@ -305,7 +317,26 @@ export const downloadStoreReportXLSX = async (
       r.counted,
       storeDiffText(r),
       STATUS_TEXT[r.status],
+      r.salePrice ?? "",
+      r.costPrice ?? "",
+      lineTL(r.counted, r.salePrice),
+      lineTL(r.counted, r.costPrice),
     ]),
+    // Alta genel toplam (Excel'de filtre/sıralamadan etkilenmez, hesaplı değer)
+    [],
+    [
+      "TOPLAM",
+      "",
+      "",
+      "",
+      round2(rows.reduce((s, r) => s + r.counted, 0)),
+      "",
+      "",
+      "",
+      "",
+      round2(rows.reduce((s, r) => s + (Number(lineTL(r.counted, r.salePrice)) || 0), 0)),
+      round2(rows.reduce((s, r) => s + (Number(lineTL(r.counted, r.costPrice)) || 0), 0)),
+    ],
   ])
   ws["!cols"] = [
     { wch: 18 },
@@ -315,6 +346,10 @@ export const downloadStoreReportXLSX = async (
     { wch: 10 },
     { wch: 8 },
     { wch: 12 },
+    { wch: 12 },
+    { wch: 12 },
+    { wch: 14 },
+    { wch: 14 },
   ]
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, "Sayım Raporu")
