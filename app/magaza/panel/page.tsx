@@ -661,9 +661,9 @@ export default function PanelPage() {
               const diffCls = (d: number) =>
                 d === 0 ? "" : d > 0 ? "text-green-700 dark:text-green-400" : "text-amber-700 dark:text-amber-400"
               const rows: { label: string; s: number; c: number; sCls?: string; cCls?: string; signed?: boolean }[] = [
-                { label: "Sayılan tutar", s: sale.counted, c: cost.counted },
-                { label: "Beklenen tutar (stok × fiyat)", s: sale.expected, c: cost.expected },
-                { label: "Fark (sayılan − beklenen)", s: sDiff, c: cDiff, sCls: diffCls(sDiff), cCls: diffCls(cDiff), signed: true },
+                { label: "Sayılan", s: sale.counted, c: cost.counted },
+                { label: "Beklenen", s: sale.expected, c: cost.expected },
+                { label: "Fark", s: sDiff, c: cDiff, sCls: diffCls(sDiff), cCls: diffCls(cDiff), signed: true },
               ]
               return (
                 <Card className="mb-3 py-0 gap-0 overflow-hidden">
@@ -679,18 +679,18 @@ export default function PanelPage() {
                       </p>
                     ) : (
                       <>
-                        <div className="grid grid-cols-[1fr_auto_auto] items-baseline gap-x-4 px-3 py-1 text-right">
+                        <div className="grid grid-cols-[auto_1fr_1fr] items-baseline gap-x-3 px-3 py-1 text-right">
                           <span />
                           <span className="py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Satış</span>
                           <span className="py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Alış</span>
                           {rows.map((r) => (
                             <div key={r.label} className="contents">
-                              <span className="border-t py-2 text-left text-[12px] text-muted-foreground">{r.label}</span>
-                              <span className={`border-t py-2 text-base font-bold tabular-nums sm:text-lg ${r.sCls ?? ""}`}>
+                              <span className="border-t py-2 text-left text-[12px] font-medium text-muted-foreground">{r.label}</span>
+                              <span className={`whitespace-nowrap border-t py-2 text-[15px] font-bold tabular-nums sm:text-lg ${r.sCls ?? ""}`}>
                                 {r.signed && r.s > 0 ? "+" : ""}
                                 {fmtTL(r.s)}
                               </span>
-                              <span className={`border-t py-2 text-base font-bold tabular-nums sm:text-lg ${r.cCls ?? ""}`}>
+                              <span className={`whitespace-nowrap border-t py-2 text-[15px] font-bold tabular-nums sm:text-lg ${r.cCls ?? ""}`}>
                                 {r.signed && r.c > 0 ? "+" : ""}
                                 {fmtTL(r.c)}
                               </span>
@@ -698,7 +698,7 @@ export default function PanelPage() {
                           ))}
                         </div>
                         <p className="border-t px-3 py-1.5 text-[11px] text-muted-foreground">
-                          Fiyatı tanımlı ürün: satış {sale.priced.toLocaleString("tr-TR")}, alış{" "}
+                          Tutar = adet × birim fiyat; beklenen = stok × fiyat. Fiyatı tanımlı ürün: satış {sale.priced.toLocaleString("tr-TR")}, alış{" "}
                           {cost.priced.toLocaleString("tr-TR")} / {dash.totals.catalogCount.toLocaleString("tr-TR")}.
                           {(sale.noPrice > 0 || cost.noPrice > 0) && (
                             <span className="font-medium text-amber-700 dark:text-amber-400">
