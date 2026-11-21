@@ -662,11 +662,6 @@ export default function PanelPage() {
               const cDiff = round2(cost.counted - cost.expected)
               const diffCls = (d: number) =>
                 d === 0 ? "" : d > 0 ? "text-green-700 dark:text-green-400" : "text-amber-700 dark:text-amber-400"
-              const rows: { label: string; s: number; c: number; sCls?: string; cCls?: string; signed?: boolean }[] = [
-                { label: "Sayılan", s: sale.counted, c: cost.counted },
-                { label: "Beklenen", s: sale.expected, c: cost.expected },
-                { label: "Fark", s: sDiff, c: cDiff, sCls: diffCls(sDiff), cCls: diffCls(cDiff), signed: true },
-              ]
               return (
                 <Card className="mb-3 py-0 gap-0 overflow-hidden">
                   <CardContent className="p-0">
@@ -681,23 +676,64 @@ export default function PanelPage() {
                       </p>
                     ) : (
                       <>
-                        <div className="grid grid-cols-[auto_1fr_1fr] items-baseline gap-x-3 px-3 py-1 text-right">
-                          <span />
-                          <span className="py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Satış</span>
-                          <span className="py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Alış</span>
-                          {rows.map((r) => (
-                            <div key={r.label} className="contents">
-                              <span className="border-t py-2 text-left text-[12px] font-medium text-muted-foreground">{r.label}</span>
-                              <span className={`whitespace-nowrap border-t py-2 text-[15px] font-bold tabular-nums sm:text-lg ${r.sCls ?? ""}`}>
-                                {r.signed && r.s > 0 ? "+" : ""}
-                                {fmtTL(r.s)}
-                              </span>
-                              <span className={`whitespace-nowrap border-t py-2 text-[15px] font-bold tabular-nums sm:text-lg ${r.cCls ?? ""}`}>
-                                {r.signed && r.c > 0 ? "+" : ""}
-                                {fmtTL(r.c)}
-                              </span>
-                            </div>
-                          ))}
+                        <div className="grid gap-3 p-3 sm:grid-cols-2">
+                          {[
+                            { key: "sale", title: "Satış fiyatıyla", dot: "bg-primary", d: sale, diff: sDiff },
+                            { key: "cost", title: "Alış fiyatıyla", dot: "bg-slate-500", d: cost, diff: cDiff },
+                          ].map((pn) => {
+                            const ratio = pn.d.expected > 0 ? (pn.d.counted / pn.d.expected) * 100 : null
+                            return (
+                              <div key={pn.key} className="overflow-hidden rounded-lg border">
+                                <div className="flex items-center gap-2 border-b bg-muted/40 px-3 py-1.5">
+                                  <span className={`h-2 w-2 rounded-full ${pn.dot}`} />
+                                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                    {pn.title}
+                                  </span>
+                                </div>
+                                <dl className="divide-y">
+                                  <div className="flex items-baseline justify-between gap-3 px-3 py-2">
+                                    <dt className="text-sm text-muted-foreground">Sayılan</dt>
+                                    <dd className="whitespace-nowrap text-base font-bold tabular-nums">{fmtTL(pn.d.counted)}</dd>
+                                  </div>
+                                  <div className="flex items-baseline justify-between gap-3 px-3 py-2">
+                                    <dt className="text-sm text-muted-foreground">Beklenen</dt>
+                                    <dd className="whitespace-nowrap text-base font-bold tabular-nums">{fmtTL(pn.d.expected)}</dd>
+                                  </div>
+                                  <div
+                                    className={`flex items-baseline justify-between gap-3 px-3 py-2 ${
+                                      pn.diff === 0
+                                        ? ""
+                                        : pn.diff > 0
+                                          ? "bg-green-50 dark:bg-green-500/10"
+                                          : "bg-amber-50 dark:bg-amber-500/10"
+                                    }`}
+                                  >
+                                    <dt className="text-sm font-medium">{pn.diff > 0 ? "Fazla" : pn.diff < 0 ? "Eksik" : "Fark"}</dt>
+                                    <dd className={`whitespace-nowrap text-base font-bold tabular-nums ${diffCls(pn.diff)}`}>
+                                      {pn.diff > 0 ? "+" : ""}
+                                      {fmtTL(pn.diff)}
+                                    </dd>
+                                  </div>
+                                </dl>
+                                {ratio != null && (
+                                  <div className="border-t px-3 py-2">
+                                    <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
+                                      <span>Sayılan / beklenen</span>
+                                      <span className="font-semibold tabular-nums text-foreground">
+                                        %{ratio.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}
+                                      </span>
+                                    </div>
+                                    <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                                      <div
+                                        className={`h-full rounded-full ${ratio > 100 ? "bg-green-600" : "bg-primary"}`}
+                                        style={{ width: `${Math.min(100, ratio)}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
                         </div>
                         <p className="border-t px-3 py-1.5 text-[11px] text-muted-foreground">
                           Tutar = adet × birim fiyat; beklenen = stok × fiyat. Fiyatı tanımlı ürün: satış {sale.priced.toLocaleString("tr-TR")}, alış{" "}
