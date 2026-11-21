@@ -198,9 +198,12 @@ export function CounterDetailDialog({
               )}
             </ul>
             {data && data.total > data.rows.length && (
-              <div className="text-center">
-                <Button variant="ghost" size="sm" onClick={() => setLimit((l) => Math.min(1000, l + 100))}>
-                  Daha fazla göster ({data.rows.length}/{data.total.toLocaleString("tr-TR")})
+              <div className="flex flex-wrap items-center justify-center gap-2 text-center">
+                <Button variant="ghost" size="sm" onClick={() => setLimit((l) => l + 200)}>
+                  Daha fazla göster ({data.rows.length.toLocaleString("tr-TR")}/{data.total.toLocaleString("tr-TR")})
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setLimit(100_000)}>
+                  Tümünü göster
                 </Button>
               </div>
             )}

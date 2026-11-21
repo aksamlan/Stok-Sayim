@@ -395,7 +395,7 @@ export function counterDetail(
   counter: string,
   opts: { search?: string; limit?: number } = {}
 ): { rows: CounterDetailRow[]; total: number; totalQty: number } {
-  const limit = Math.min(Math.max(1, Math.floor(opts.limit ?? 100)), 1000)
+  const limit = Math.min(Math.max(1, Math.floor(opts.limit ?? 100)), 100_000)
   const search = opts.search?.trim()
   const filter = search ? "WHERE (g.barcode LIKE ? OR tr_lower(p.name) LIKE ?)" : ""
   const filterParams = search ? [`%${search}%`, `%${search.toLocaleLowerCase("tr")}%`] : []

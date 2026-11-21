@@ -173,3 +173,15 @@ test("yönetici adet eksiltir: yalnız mevcuttan küçüğe, ondalık olur, fazl
   }
   expect(() => decreaseCounterItem(db, storeId, sessionId, "Murat", "3", 1)).toThrow() // sayımda yok
 })
+
+test("yönetici listelerinde eski 1000/500 sınırı yok: binlerce çeşit ve hareket tamamen görülebilir", () => {
+  const { db, storeId, sessionId } = setup()
+  const n = 1500
+  const evs: ScanEvent[] = []
+  for (let i = 0; i < n; i++) evs.push(ev(sessionId, "b" + i, 1))
+  for (let i = 0; i < n; i += 500) recordEvents(db, storeId, "Harun", evs.slice(i, i + 500))
+  const d = counterDetail(db, storeId, sessionId, "Harun", { limit: 100_000 })
+  expect(d.rows).toHaveLength(n) // 1000'de kesilmez
+  expect(d.total).toBe(n)
+  expect(listActivity(db, storeId, { sessionId, limit: 50_000 }).filter((e) => e.action === "scan")).toHaveLength(n) // 500'de kesilmez
+})

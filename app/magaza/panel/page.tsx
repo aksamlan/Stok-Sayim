@@ -134,6 +134,8 @@ export default function PanelPage() {
   const [dash, setDash] = useState<DashboardResult | null>(null)
   const [filter, setFilter] = useState<"problems" | "all">("problems")
   const [sort, setSort] = useState("recent")
+  const [pageSize, setPageSize] = useState(100)
+  const [jump, setJump] = useState("")
   const [category, setCategory] = useState("")
   const [search, setSearch] = useState("")
   const [page, setPage] = useState(1)
@@ -243,6 +245,7 @@ export default function PanelPage() {
         search: searchRef.current || undefined,
         category: category || undefined,
         sort,
+        pageSize,
         page,
       })
       setDash(d)
@@ -250,7 +253,7 @@ export default function PanelPage() {
     } catch (err) {
       handleAuthError(err)
     }
-  }, [auth, viewSession, filter, category, sort, page, handleAuthError])
+  }, [auth, viewSession, filter, category, sort, pageSize, page, handleAuthError])
 
   // İlk yükleme + filtre değişimi + 5 sn canlı yenileme
   useEffect(() => {
@@ -396,7 +399,7 @@ export default function PanelPage() {
     .map((c) => c.category)
     .filter((c): c is string => c !== null)
   const hasCategories = categories.length > 0
-  const pageCount = dash ? Math.max(1, Math.ceil(dash.rowTotal / 100)) : 1
+  const pageCount = dash ? Math.max(1, Math.ceil(dash.rowTotal / pageSize)) : 1
   const staleCounters = (dash?.byCounter ?? [])
     .filter((c) => Date.now() - c.lastAt > 10 * 60 * 1000)
     .map((c) => c.counter)
@@ -1118,18 +1121,55 @@ export default function PanelPage() {
                   </div>
                   </>
                 )}
-                {pageCount > 1 && (
-                  <div className="flex items-center justify-between px-3 py-2 border-t text-xs text-muted-foreground">
+                {dash.rowTotal > 100 && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2 text-xs text-muted-foreground">
                     <span>
-                      {dash.rowTotal.toLocaleString("tr-TR")} kayıt · sayfa {page}/{pageCount}
+                      {dash.rowTotal.toLocaleString("tr-TR")} kayıt · sayfa {page}/{pageCount.toLocaleString("tr-TR")}
                     </span>
-                    <div className="flex gap-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <select
+                        value={pageSize}
+                        onChange={(e) => {
+                          setPageSize(Number(e.target.value))
+                          setPage(1)
+                        }}
+                        className="h-7 rounded-md border bg-card px-1.5 text-xs"
+                        aria-label="Sayfa başına kayıt"
+                      >
+                        {[100, 250, 500, 1000].map((n) => (
+                          <option key={n} value={n}>
+                            {n} / sayfa
+                          </option>
+                        ))}
+                      </select>
+                      <form
+                        className="flex items-center gap-1"
+                        onSubmit={(e) => {
+                          e.preventDefault()
+                          const n = parseInt(jump, 10)
+                          if (Number.isFinite(n)) setPage(Math.min(pageCount, Math.max(1, n)))
+                          setJump("")
+                        }}
+                      >
+                        <Input
+                          value={jump}
+                          onChange={(e) => setJump(e.target.value.replace(/\D/g, ""))}
+                          placeholder="sayfa"
+                          inputMode="numeric"
+                          className="h-7 w-16 px-2 text-xs"
+                          aria-label="Sayfaya git"
+                        />
+                        <Button type="submit" size="sm" variant="outline" className="h-7 px-2 text-xs">
+                          Git
+                        </Button>
+                      </form>
                       <Button
                         size="sm"
                         variant="outline"
                         className="h-7 w-7 p-0"
                         disabled={page <= 1}
                         onClick={() => setPage((p) => p - 1)}
+                        aria-label="Önceki sayfa"
                       >
                         <ChevronLeft className="h-4 w-4" />
                       </Button>
@@ -1139,6 +1179,7 @@ export default function PanelPage() {
                         className="h-7 w-7 p-0"
                         disabled={page >= pageCount}
                         onClick={() => setPage((p) => p + 1)}
+                        aria-label="Sonraki sayfa"
                       >
                         <ChevronRight className="h-4 w-4" />
                       </Button>

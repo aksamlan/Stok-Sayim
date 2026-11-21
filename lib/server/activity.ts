@@ -43,7 +43,7 @@ export function listActivity(
   storeId: string,
   opts: { sessionId?: string; actor?: string; limit?: number }
 ): ActivityEntry[] {
-  const limit = Math.min(Math.max(1, Math.floor(opts.limit ?? 50)), 500)
+  const limit = Math.min(Math.max(1, Math.floor(opts.limit ?? 50)), 50_000)
   const scanWhere = ["e.store_id = ?"]
   const scanParams: (string | number)[] = [storeId]
   const logWhere = ["store_id = ?"]

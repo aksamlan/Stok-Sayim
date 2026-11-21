@@ -16,7 +16,8 @@ export const GET = handle((req) => {
       category: params.get("category") ?? undefined,
       sort: (params.get("sort") ?? undefined) as DashSort | undefined,
       page: Number(params.get("page") ?? 1) || 1,
-      pageSize: 100,
+      // Yönetici sayfa boyutunu seçebilir (yalnız beyaz liste)
+      pageSize: [100, 250, 500, 1000].includes(Number(params.get("pageSize"))) ? Number(params.get("pageSize")) : 100,
     })
   )
 })

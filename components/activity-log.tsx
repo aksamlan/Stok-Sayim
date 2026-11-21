@@ -52,7 +52,7 @@ export function ActivityFeed({
   actor,
   active,
   onError,
-  max = 500,
+  max = 50_000,
 }: {
   token: string
   sessionId?: string
@@ -125,9 +125,12 @@ export function ActivityFeed({
         })}
       </ul>
       {entries.length >= limit && limit < max && (
-        <div className="border-t p-2 text-center">
-          <Button variant="ghost" size="sm" onClick={() => setLimit((l) => Math.min(max, l + 50))}>
+        <div className="flex flex-wrap items-center justify-center gap-2 border-t p-2 text-center">
+          <Button variant="ghost" size="sm" onClick={() => setLimit((l) => Math.min(max, l + 100))}>
             Daha fazla göster
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setLimit(max)}>
+            Hepsini göster
           </Button>
         </div>
       )}
