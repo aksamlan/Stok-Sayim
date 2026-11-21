@@ -30,6 +30,8 @@ export type ValueTotals = {
   costPriced: number
   countedNoSale: number // sayılmış ama satış fiyatı olmayan ürün sayısı
   countedNoCost: number
+  // Stok dosyasında eksi stoklu ürün sayısı; beklenen tutarda 0 sayılır (eksi tutar anlamsız)
+  negativeStock: number
 }
 
 export type DashboardResult = {
@@ -235,13 +237,14 @@ export function dashboard(
            COALESCE(SUM(status = 'only-count'), 0) AS unknownCount,
            COALESCE(SUM(status <> 'only-count'), 0) AS catalogCount,
            ROUND(COALESCE(SUM(counted * COALESCE(sale_price, 0)), 0), 2) AS saleCounted,
-           ROUND(COALESCE(SUM(COALESCE(expected, 0) * COALESCE(sale_price, 0)), 0), 2) AS saleExpected,
+           ROUND(COALESCE(SUM(MAX(COALESCE(expected, 0), 0) * COALESCE(sale_price, 0)), 0), 2) AS saleExpected,
            ROUND(COALESCE(SUM(counted * COALESCE(cost_price, 0)), 0), 2) AS costCounted,
-           ROUND(COALESCE(SUM(COALESCE(expected, 0) * COALESCE(cost_price, 0)), 0), 2) AS costExpected,
+           ROUND(COALESCE(SUM(MAX(COALESCE(expected, 0), 0) * COALESCE(cost_price, 0)), 0), 2) AS costExpected,
            COALESCE(SUM(status <> 'only-count' AND COALESCE(sale_price, 0) > 0), 0) AS salePriced,
            COALESCE(SUM(status <> 'only-count' AND COALESCE(cost_price, 0) > 0), 0) AS costPriced,
            COALESCE(SUM(counted <> 0 AND COALESCE(sale_price, 0) <= 0), 0) AS countedNoSale,
-           COALESCE(SUM(counted <> 0 AND COALESCE(cost_price, 0) <= 0), 0) AS countedNoCost
+           COALESCE(SUM(counted <> 0 AND COALESCE(cost_price, 0) <= 0), 0) AS countedNoCost,
+           COALESCE(SUM(expected < 0), 0) AS negativeStock
          FROM temp.dash_rows`
       )
       .get() as {
@@ -332,6 +335,7 @@ function buildResult(
         costPriced: totals.costPriced,
         countedNoSale: totals.countedNoSale,
         countedNoCost: totals.countedNoCost,
+        negativeStock: totals.negativeStock,
       },
     },
     byCounter: byCounter.map((c) => ({

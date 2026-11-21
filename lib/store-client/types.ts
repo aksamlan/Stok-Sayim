@@ -59,6 +59,7 @@ export type ValueTotals = {
   costPriced: number
   countedNoSale: number
   countedNoCost: number
+  negativeStock: number
 }
 
 export type DashboardResult = {

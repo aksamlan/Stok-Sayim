@@ -739,6 +739,12 @@ export default function PanelPage() {
                               Sayılan {noPrice.toLocaleString("tr-TR")} ürünün fiyatı yok, tutara dahil değil.
                             </span>
                           )}
+                          {v.negativeStock > 0 && (
+                            <span>
+                              {" "}
+                              Stok dosyasında {v.negativeStock.toLocaleString("tr-TR")} ürünün stoğu eksi; beklenen tutarda 0 sayıldı.
+                            </span>
+                          )}
                         </p>
                       </>
                     )}

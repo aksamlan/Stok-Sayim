@@ -47,6 +47,18 @@ test("tutarlar: sayılan×fiyat, beklenen×fiyat, fiyatı olmayan 0 katar ve say
   expect(row).toMatchObject({ salePrice: 22.5, costPrice: 17.25 })
 })
 
+test("eksi stok beklenen tutara eksi katmaz (0 sayılır), eksi stoklu ürün sayılır", () => {
+  const { db, storeId, sessionId } = setup()
+  replaceCatalog(db, storeId, [
+    { barcode: "1", name: "A", category: "K", expected: 10, salePrice: 10, costPrice: 5 },
+    { barcode: "2", name: "B", category: "K", expected: -50, salePrice: 100, costPrice: 40 }, // ERP'de eksi stok
+  ])
+  const v = dashboard(db, storeId, sessionId, all).totals.value
+  expect(v.saleExpected).toBe(100) // yalnız A: 10 × 10
+  expect(v.costExpected).toBe(50)
+  expect(v.negativeStock).toBe(1)
+})
+
 test("kilolu adet × fiyat kayma yapmaz", () => {
   const { db, storeId, sessionId } = setup()
   recordEvents(db, storeId, "Ali", [ev(sessionId, "1", 0.1), ev(sessionId, "1", 0.2)])
