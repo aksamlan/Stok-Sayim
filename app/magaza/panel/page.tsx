@@ -938,7 +938,71 @@ export default function PanelPage() {
                       : "Kayıt yok"}
                   </p>
                 ) : (
-                  <div className="max-h-[60vh] overflow-auto">
+                  <>
+                  {/* Telefon: her ürün bir kart (tablo yatayda sığmıyor) */}
+                  <ul className="sm:hidden max-h-[70vh] divide-y overflow-auto">
+                    {dash.rows.map((r) => {
+                      const badge = STATUS_BADGE[r.status]
+                      const tone = (d: number) =>
+                        d === 0 ? "text-muted-foreground" : d > 0 ? "text-green-700 dark:text-green-400" : "text-amber-700 dark:text-amber-400"
+                      const signed = (d: number) => (d > 0 ? "+" : "") + fmtQty(d)
+                      const signedTL = (d: number | null) => (d == null ? "—" : (d > 0 ? "+" : "") + fmtTLShort(d))
+                      return (
+                        <li key={r.barcode} className="px-3 py-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium leading-tight">
+                                {r.name ?? <span className="text-amber-700 dark:text-amber-400">Listede yok</span>}
+                              </p>
+                              <p className="font-mono text-[12px] leading-tight text-muted-foreground">{r.barcode}</p>
+                            </div>
+                            <Badge variant="outline" className={`shrink-0 ${badge.cls}`}>
+                              {badge.label}
+                            </Badge>
+                          </div>
+                          <div className="mt-1.5 grid grid-cols-3 gap-1.5 text-center">
+                            <div className="rounded-md bg-muted/50 px-1 py-1">
+                              <p className="text-[10px] text-muted-foreground">Beklenen</p>
+                              <p className={`text-sm font-semibold tabular-nums ${r.expected != null && r.expected < 0 ? "text-destructive" : ""}`}>
+                                {r.expected == null ? "—" : fmtQty(r.expected)}
+                              </p>
+                            </div>
+                            <div className="rounded-md bg-muted/50 px-1 py-1">
+                              <p className="text-[10px] text-muted-foreground">Sayılan</p>
+                              <p className="text-sm font-bold tabular-nums">{fmtQty(r.counted)}</p>
+                            </div>
+                            <div className="rounded-md bg-muted/50 px-1 py-1">
+                              <p className="text-[10px] text-muted-foreground">Fark</p>
+                              <p className={`text-sm font-bold tabular-nums ${tone(r.diffQty)}`}>{signed(r.diffQty)}</p>
+                            </div>
+                          </div>
+                          {(r.salePrice != null || r.costPrice != null) && (
+                            <div className="mt-1.5 grid grid-cols-2 gap-1.5 text-xs">
+                              <p className="rounded-md border px-2 py-1">
+                                <span className="text-muted-foreground">Fark ₺ satış </span>
+                                <b className={`tabular-nums ${r.diffSale == null ? "text-muted-foreground" : tone(r.diffSale)}`}>
+                                  {signedTL(r.diffSale)}
+                                </b>
+                              </p>
+                              <p className="rounded-md border px-2 py-1">
+                                <span className="text-muted-foreground">Fark ₺ alış </span>
+                                <b className={`tabular-nums ${r.diffCost == null ? "text-muted-foreground" : tone(r.diffCost)}`}>
+                                  {signedTL(r.diffCost)}
+                                </b>
+                              </p>
+                            </div>
+                          )}
+                          {(r.salePrice != null || r.costPrice != null) && (
+                            <p className="mt-1 text-[11px] text-muted-foreground">
+                              Birim: satış {r.salePrice != null ? fmtTLShort(r.salePrice) : "—"} · alış{" "}
+                              {r.costPrice != null ? fmtTLShort(r.costPrice) : "—"}
+                            </p>
+                          )}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  <div className="hidden sm:block max-h-[60vh] overflow-auto">
                     <Table>
                       <TableHeader className="sticky top-0 bg-card z-10 shadow-[0_1px_0_0_var(--border)]">
                         <TableRow>
@@ -1016,6 +1080,7 @@ export default function PanelPage() {
                       </TableBody>
                     </Table>
                   </div>
+                  </>
                 )}
                 {pageCount > 1 && (
                   <div className="flex items-center justify-between px-3 py-2 border-t text-xs text-muted-foreground">
